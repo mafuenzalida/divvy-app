@@ -12,10 +12,12 @@ import io
 from typing import Optional
 from datetime import datetime
 
-from fastapi import FastAPI, UploadFile, File, HTTPException, WebSocket
+from fastapi import FastAPI, UploadFile, File, HTTPException, WebSocket, Request, Depends
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
+import secrets
 import asyncio
 from pydantic import BaseModel
 from PIL import Image
@@ -42,6 +44,9 @@ bills_storage: dict = {}
 
 # Fintoc configuration
 FINTOC_USERNAME = "mfuenzalida"
+
+# App password protection (optional)
+APP_PASSWORD = os.getenv("APP_PASSWORD", "")
 
 # Check available API keys
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -163,6 +168,10 @@ class SelfAssignRequest(BaseModel):
 class SetBillStatusRequest(BaseModel):
     bill_id: str
     status: str  # draft, ready, closed
+
+
+class AuthRequest(BaseModel):
+    password: str
 
 
 
@@ -430,8 +439,33 @@ async def get_status():
         "ocr_engine": OCR_ENGINE,
         "openai_configured": USE_OPENAI,
         "gemini_configured": USE_GEMINI,
-        "storage_mode": database.get_storage_mode()
+        "storage_mode": database.get_storage_mode(),
+        "password_required": bool(APP_PASSWORD)
     }
+
+
+@app.post("/api/auth")
+async def authenticate(request: AuthRequest):
+    """Authenticate with app password."""
+    if not APP_PASSWORD:
+        return {"authenticated": True}
+    
+    if secrets.compare_digest(request.password, APP_PASSWORD):
+        return {"authenticated": True}
+    
+    raise HTTPException(status_code=401, detail="Contraseña incorrecta")
+
+
+@app.get("/api/auth/check")
+async def check_auth(password: str = ""):
+    """Check if password is correct (via query param for simple check)."""
+    if not APP_PASSWORD:
+        return {"authenticated": True, "password_required": False}
+    
+    if password and secrets.compare_digest(password, APP_PASSWORD):
+        return {"authenticated": True, "password_required": True}
+    
+    return {"authenticated": False, "password_required": True}
 
 
 @app.post("/api/create-bill")

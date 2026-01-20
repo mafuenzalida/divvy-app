@@ -1167,6 +1167,21 @@
         </div>
     </div>
 
+    <!-- Login Modal (password protection) -->
+    <div class="modal-overlay" id="login-modal" style="z-index: 10001;">
+        <div class="modal" style="text-align: center;">
+            <h3 class="modal-title">🔐 Acceso Protegido</h3>
+            <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">Ingresa la contraseña para continuar</p>
+            <form id="login-form">
+                <div class="extras-input" style="margin-bottom: 1.5rem;">
+                    <input type="password" id="login-password" placeholder="Contraseña" required style="text-align: center; font-size: 1.1rem;">
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%;">Entrar</button>
+            </form>
+            <p id="login-error" style="color: var(--danger); margin-top: 1rem; display: none;">Contraseña incorrecta</p>
+        </div>
+    </div>
+
     <!-- Toast Container -->
     <div class="toast-container" id="toast-container"></div>
 
@@ -1175,10 +1190,72 @@
         let currentBill = null;
         let selectedItemId = null;
         let allBills = [];
+        let isAuthenticated = false;
 
         // LocalStorage keys
         const STORAGE_KEY = 'cobrof_current_bill';
         const BILLS_STORAGE_KEY = 'cobrof_all_bills';
+        const AUTH_STORAGE_KEY = 'cobrof_auth';
+
+        // Auth functions
+        async function checkAuth() {
+            const savedPassword = localStorage.getItem(AUTH_STORAGE_KEY) || '';
+            try {
+                const response = await fetch(`/api/auth/check?password=${encodeURIComponent(savedPassword)}`);
+                const data = await response.json();
+                
+                if (!data.password_required) {
+                    isAuthenticated = true;
+                    return true;
+                }
+                
+                if (data.authenticated) {
+                    isAuthenticated = true;
+                    return true;
+                }
+                
+                // Show login modal
+                document.getElementById('login-modal').classList.add('active');
+                return false;
+            } catch (e) {
+                console.error('Auth check failed:', e);
+                isAuthenticated = true; // Allow access if auth check fails
+                return true;
+            }
+        }
+
+        async function attemptLogin(password) {
+            try {
+                const response = await fetch('/api/auth', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password })
+                });
+                
+                if (response.ok) {
+                    localStorage.setItem(AUTH_STORAGE_KEY, password);
+                    isAuthenticated = true;
+                    document.getElementById('login-modal').classList.remove('active');
+                    document.getElementById('login-error').style.display = 'none';
+                    initializeApp();
+                    return true;
+                } else {
+                    document.getElementById('login-error').style.display = 'block';
+                    return false;
+                }
+            } catch (e) {
+                console.error('Login failed:', e);
+                document.getElementById('login-error').style.display = 'block';
+                return false;
+            }
+        }
+
+        // Login form handler
+        document.getElementById('login-form')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const password = document.getElementById('login-password').value;
+            await attemptLogin(password);
+        });
 
         // Save current bill to localStorage
         function saveState() {
@@ -2401,26 +2478,28 @@
             }, 3000);
         }
 
-        // Close modals on outside click
+        // Close modals on outside click (except login modal)
         document.querySelectorAll('.modal-overlay').forEach(overlay => {
             overlay.addEventListener('click', (e) => {
-                if (e.target === overlay) {
+                if (e.target === overlay && overlay.id !== 'login-modal') {
                     overlay.classList.remove('active');
                 }
             });
         });
 
-        // Keyboard shortcuts
+        // Keyboard shortcuts (Escape closes modals except login)
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
                 document.querySelectorAll('.modal-overlay').forEach(overlay => {
-                    overlay.classList.remove('active');
+                    if (overlay.id !== 'login-modal') {
+                        overlay.classList.remove('active');
+                    }
                 });
             }
         });
 
-        // Page load - restore saved state
-        document.addEventListener('DOMContentLoaded', async () => {
+        // Initialize app after authentication
+        async function initializeApp() {
             // Always load and render bills history
             loadAllBills();
             
@@ -2457,6 +2536,14 @@
             
             // Render history in sidebar (if visible)
             renderBillsHistory();
+        }
+
+        // Page load - check auth then restore state
+        document.addEventListener('DOMContentLoaded', async () => {
+            const authenticated = await checkAuth();
+            if (authenticated) {
+                initializeApp();
+            }
         });
 
         // Bill title form
