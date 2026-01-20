@@ -1,0 +1,2589 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Divvy - Split Bills Beautifully</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #12121a;
+            --bg-card: #1a1a24;
+            --bg-elevated: #222230;
+            --accent: #6366f1;
+            --accent-soft: #818cf8;
+            --accent-glow: rgba(99, 102, 241, 0.3);
+            --success: #10b981;
+            --success-soft: #34d399;
+            --success-rgb: 16, 185, 129;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --border: #2d2d3a;
+            --border-light: #3d3d4a;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        /* Background effect */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(ellipse at 20% 20%, rgba(99, 102, 241, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 80%, rgba(16, 185, 129, 0.06) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 50%, rgba(99, 102, 241, 0.03) 0%, transparent 70%);
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        /* Header */
+        header {
+            text-align: center;
+            padding: 3rem 0;
+            animation: fadeInDown 0.6s ease-out;
+        }
+
+        .logo {
+            font-size: 3rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent) 0%, var(--success) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.5rem;
+            letter-spacing: -0.02em;
+        }
+
+        .tagline {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+            font-weight: 300;
+        }
+
+        /* Upload Section */
+        /* Compact Upload Zone (integrated into main page) */
+        .upload-zone-compact {
+            border: 2px dashed var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: var(--bg-elevated);
+            margin-bottom: 1rem;
+        }
+        
+        .upload-zone-compact:hover {
+            border-color: var(--accent);
+            background: rgba(99, 102, 241, 0.05);
+        }
+        
+        .upload-zone-compact.drag-over {
+            border-color: var(--accent);
+            background: rgba(99, 102, 241, 0.1);
+        }
+        
+        .upload-zone-compact .upload-icon {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .upload-zone-compact .upload-text {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin: 0;
+        }
+        
+        .upload-zone-compact input[type="file"] {
+            display: none;
+        }
+        
+        .upload-zone-compact.has-bill {
+            padding: 0.75rem;
+            border-style: solid;
+            border-color: var(--success);
+            background: rgba(16, 185, 129, 0.05);
+        }
+        
+        .upload-zone-compact.has-bill .upload-text {
+            color: var(--success);
+        }
+
+        /* Legacy upload section - hidden */
+        .upload-section {
+            display: none !important;
+        }
+
+        .upload-zone {
+            border: 2px dashed var(--border);
+            border-radius: 20px;
+            padding: 4rem 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: var(--bg-secondary);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .upload-zone:hover {
+            border-color: var(--accent);
+            background: var(--bg-card);
+            transform: translateY(-2px);
+        }
+
+        .upload-zone.dragover {
+            border-color: var(--accent);
+            background: var(--bg-card);
+            box-shadow: 0 0 30px var(--accent-glow);
+        }
+
+        .upload-zone::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, transparent 50%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .upload-zone:hover::before {
+            opacity: 1;
+        }
+
+        .upload-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            opacity: 0.8;
+        }
+
+        .upload-text {
+            font-size: 1.25rem;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .upload-hint {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        #file-input {
+            display: none;
+        }
+
+        /* Loading State */
+        .loading {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+            padding: 3rem;
+        }
+
+        .loading.active {
+            display: flex;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        .loading-text {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+        }
+
+        /* Main Content Grid */
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 380px;
+            gap: 2rem;
+            margin-top: 2rem;
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        @media (max-width: 900px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Cards */
+        .card {
+            background: var(--bg-secondary);
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            overflow: hidden;
+        }
+
+        .card-header {
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .card-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .card-body {
+            padding: 1.5rem;
+        }
+
+        /* Items List */
+        .items-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            max-height: 400px;
+            overflow-y: auto;
+            padding-right: 0.5rem;
+        }
+        
+        .items-list::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .items-list::-webkit-scrollbar-track {
+            background: var(--bg-elevated);
+            border-radius: 3px;
+        }
+        
+        .items-list::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 3px;
+        }
+        
+        .items-list::-webkit-scrollbar-thumb:hover {
+            background: var(--text-muted);
+        }
+
+        .item-row {
+            display: grid;
+            grid-template-columns: auto 1fr auto auto;
+            gap: 0.75rem;
+            padding: 0.6rem 0.9rem;
+            align-items: center;
+            background: var(--bg-card);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            align-items: center;
+            transition: all 0.2s ease;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        .item-row:hover {
+            border-color: var(--border-light);
+        }
+        
+        .item-row.drag-over {
+            border-color: var(--accent);
+            background: rgba(99, 102, 241, 0.1);
+            box-shadow: 0 0 0 2px var(--accent-glow);
+            transform: translateX(4px);
+        }
+
+        .item-image {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            object-fit: cover;
+            background: var(--bg-elevated);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            flex-shrink: 0;
+        }
+        
+        .item-image img {
+            width: 100%;
+            height: 100%;
+            border-radius: 8px;
+            object-fit: cover;
+        }
+
+        .item-name {
+            font-weight: 500;
+            color: var(--text-primary);
+            font-size: 0.9rem;
+        }
+
+        .item-price {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 500;
+            color: var(--accent-soft);
+            font-size: 0.9rem;
+        }
+
+        .item-assignees {
+            display: flex;
+            gap: 0.2rem;
+            flex-wrap: wrap;
+            margin-top: 0.2rem;
+        }
+
+        .assignee-badge {
+            padding: 0.15rem 0.4rem;
+            background: var(--accent);
+            color: white;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        
+        .assignee-badge:hover {
+            background: var(--danger);
+            transform: scale(1.05);
+        }
+        
+        .assignee-badge::after {
+            content: ' ✕';
+            font-size: 0.6rem;
+            opacity: 0;
+            transition: opacity 0.15s;
+        }
+        
+        .assignee-badge:hover::after {
+            opacity: 1;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .item-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        /* People Section */
+        .people-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .person-chip {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 0.9rem;
+        }
+
+        .person-chip:hover {
+            border-color: var(--accent);
+            background: var(--bg-elevated);
+        }
+
+        .person-chip.selected {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: white;
+        }
+
+        .person-avatar {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+        }
+
+        .remove-person {
+            opacity: 0;
+            transition: opacity 0.2s;
+            cursor: pointer;
+            color: var(--danger);
+        }
+
+        .person-chip:hover .remove-person {
+            opacity: 1;
+        }
+
+        /* Add Person Input */
+        .add-person-form {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .add-person-form input {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 0.9rem;
+            transition: all 0.2s ease;
+        }
+
+        .add-person-form input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+
+        .add-person-form input::placeholder {
+            color: var(--text-muted);
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: 10px;
+            font-family: inherit;
+            font-weight: 500;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-soft);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px var(--accent-glow);
+        }
+
+        .btn-secondary {
+            background: var(--bg-card);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background: var(--bg-elevated);
+            border-color: var(--border-light);
+        }
+
+        .btn-sm {
+            padding: 0.5rem 0.75rem;
+            font-size: 0.8rem;
+            border-radius: 8px;
+        }
+
+        .btn-icon {
+            padding: 0.5rem;
+            background: transparent;
+            color: var(--text-muted);
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-icon:hover {
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+        }
+
+        .btn-icon.danger:hover {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--danger);
+        }
+
+        /* Tax & Tip Section */
+        .extras-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .extras-input {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .extras-input label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .extras-input input {
+            padding: 0.75rem 1rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            color: var(--text-primary);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1rem;
+            transition: all 0.2s ease;
+        }
+
+        .extras-input input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+
+        /* Summary */
+        .summary-section {
+            background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-elevated) 100%);
+            border-radius: 16px;
+            padding: 1.5rem;
+            border: 1px solid var(--border);
+        }
+
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .summary-row:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+
+        .summary-row.total {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--accent-soft);
+            padding-top: 1rem;
+            margin-top: 0.5rem;
+            border-top: 2px solid var(--border);
+            border-bottom: none;
+        }
+
+        .summary-label {
+            color: var(--text-secondary);
+        }
+
+        .summary-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 500;
+        }
+
+        /* Split Results */
+        .split-results {
+            display: none;
+            margin-top: 2rem;
+            animation: fadeInUp 0.5s ease-out;
+        }
+
+        .split-results.active {
+            display: block;
+        }
+
+        .split-card {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 1.5rem;
+            border: 1px solid var(--border);
+            margin-bottom: 1rem;
+            transition: all 0.2s ease;
+        }
+
+        .split-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .split-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .split-person {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .split-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 1rem;
+        }
+
+        .split-name {
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .split-amount {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--success);
+        }
+
+        .payment-link {
+            display: block;
+            width: 100%;
+            padding: 1rem;
+            background: linear-gradient(135deg, var(--success) 0%, #059669 100%);
+            color: white;
+            text-align: center;
+            text-decoration: none;
+            border-radius: 12px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+
+        .payment-link:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(16, 185, 129, 0.4);
+        }
+
+        .copy-link {
+            margin-top: 0.75rem;
+            width: 100%;
+            text-align: center;
+        }
+
+        /* Assign Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(4px);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            animation: fadeIn 0.2s ease-out;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: var(--bg-secondary);
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            padding: 2rem;
+            max-width: 400px;
+            width: 90%;
+            animation: scaleIn 0.3s ease-out;
+        }
+
+        .modal-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .modal-subtitle {
+            color: var(--text-secondary);
+            margin-bottom: 1.5rem;
+        }
+
+        .modal-people {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .modal-person {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 1rem;
+            background: var(--bg-card);
+            border-radius: 12px;
+            border: 2px solid transparent;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .modal-person:hover {
+            background: var(--bg-elevated);
+        }
+
+        .modal-person.selected {
+            border-color: var(--accent);
+            background: rgba(99, 102, 241, 0.1);
+        }
+
+        .modal-person-check {
+            width: 24px;
+            height: 24px;
+            border-radius: 6px;
+            border: 2px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .modal-person.selected .modal-person-check {
+            background: var(--accent);
+            border-color: var(--accent);
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 0.75rem;
+            justify-content: flex-end;
+        }
+
+        /* Toast Notifications */
+        .toast-container {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            z-index: 2000;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .toast {
+            padding: 1rem 1.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            color: var(--text-primary);
+            animation: slideInRight 0.3s ease-out;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .toast.success {
+            border-color: var(--success);
+        }
+
+        .toast.error {
+            border-color: var(--danger);
+        }
+
+        /* Animations */
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateX(100px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes scaleIn {
+            from {
+                opacity: 0;
+                transform: scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-primary);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--border-light);
+        }
+
+        /* Avatar colors */
+        .avatar-1 { background: linear-gradient(135deg, #6366f1, #8b5cf6); }
+        .avatar-2 { background: linear-gradient(135deg, #10b981, #14b8a6); }
+        .avatar-3 { background: linear-gradient(135deg, #f59e0b, #f97316); }
+        .avatar-4 { background: linear-gradient(135deg, #ef4444, #ec4899); }
+        .avatar-5 { background: linear-gradient(135deg, #3b82f6, #06b6d4); }
+        .avatar-6 { background: linear-gradient(135deg, #8b5cf6, #d946ef); }
+
+    </style>
+    
+    <!-- Live Reload (development only) -->
+    <script>
+        (function() {
+            if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+                const ws = new WebSocket(`ws://${location.host}/ws/live-reload`);
+                ws.onmessage = (e) => { if (e.data === 'reload') location.reload(); };
+                ws.onclose = () => setTimeout(() => location.reload(), 2000);
+                console.log('🔄 Live reload enabled');
+            }
+        })();
+    </script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1 class="logo">Divvy</h1>
+            <p class="tagline">Escanea, divide y cobra — sin drama ✨</p>
+        </header>
+
+        <!-- Upload Section -->
+        <section class="upload-section" id="upload-section">
+            <div class="upload-zone" id="upload-zone">
+                <div class="upload-icon">📄</div>
+                <p class="upload-text">Arrastra tu boleta aquí</p>
+                <p class="upload-hint">o haz clic para seleccionar una imagen</p>
+                <input type="file" id="file-input" accept="image/*">
+            </div>
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p class="loading-text">Escaneando boleta con IA...</p>
+            </div>
+        </section>
+
+        <!-- Main Content -->
+        <main class="main-grid" id="main-content">
+            <!-- Locked Banner -->
+            <div id="locked-banner" style="display: none; grid-column: 1 / -1; background: linear-gradient(135deg, var(--warning), #d97706); color: white; padding: 1rem 1.5rem; border-radius: 12px; margin-bottom: 1rem; text-align: center; font-weight: 500;">
+                🔒 Boleta Bloqueada — Usa las casillas en "Calcular División" para marcar quién ha pagado
+            </div>
+
+            <!-- Left Column: Items -->
+            <div class="items-column">
+                <!-- Compact Upload Zone -->
+                <div class="upload-zone-compact" id="upload-zone-compact">
+                    <div class="upload-icon">📸</div>
+                    <p class="upload-text">Sube una foto de tu boleta para escanearla con IA</p>
+                    <input type="file" id="file-input-compact" accept="image/*">
+                </div>
+                
+                <!-- Loading indicator -->
+                <div id="upload-loading" style="display: none; text-align: center; padding: 1.5rem; background: var(--bg-elevated); border-radius: 12px; margin-bottom: 1rem;">
+                    <div class="spinner" style="margin: 0 auto 0.75rem;"></div>
+                    <p style="color: var(--text-secondary); margin: 0; font-size: 0.9rem;">Escaneando boleta con IA...</p>
+                </div>
+
+                <div class="card" id="items-card">
+                    <div class="card-header" id="items-card-header">
+                        <h2 class="card-title">
+                            🧾 Items de la Boleta
+                        </h2>
+                        <button id="add-item-btn" class="btn btn-secondary btn-sm" onclick="openAddItemModal()">
+                            + Agregar
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div class="items-list" id="items-list">
+                            <p id="empty-items-msg" style="color: var(--text-muted); text-align: center; padding: 2rem;">
+                                Sube una boleta o agrega items manualmente
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Split Results -->
+                <div class="split-results" id="split-results">
+                    <h2 class="card-title" style="margin-bottom: 1rem;">💸 Links de Pago</h2>
+                    <div id="split-cards">
+                        <!-- Split cards will be rendered here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: People & Summary -->
+            <div class="sidebar-column">
+                <!-- Bill Title Card -->
+                <div class="card" style="margin-bottom: 1.5rem;">
+                    <div class="card-header">
+                        <h2 class="card-title">📝 Título</h2>
+                    </div>
+                    <div class="card-body">
+                        <form id="bill-title-form" style="display: flex; gap: 0.5rem;">
+                            <input type="text" id="bill-title-input" placeholder="Ej: Cumple Nico" style="flex: 1; padding: 0.75rem 1rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; color: var(--text-primary); font-family: inherit; font-size: 0.9rem;">
+                            <button type="submit" class="btn btn-secondary" style="padding: 0.75rem 1rem;">Guardar</button>
+                        </form>
+                        <p style="margin-top: 0.5rem; color: var(--text-muted); font-size: 0.8rem;">
+                            El título se guarda junto a la boleta (y aparece en el link de participantes).
+                        </p>
+                    </div>
+                </div>
+
+                <!-- People Card -->
+                <div class="card" style="margin-bottom: 1.5rem;">
+                    <div class="card-header">
+                        <h2 class="card-title">👥 Personas</h2>
+                        <span style="font-size: 0.7rem; color: var(--text-muted);">Arrastra a items</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="people-grid" id="people-grid">
+                            <!-- People chips will be rendered here -->
+                        </div>
+                        <form class="add-person-form" id="add-person-form">
+                            <input type="text" id="person-name-input" placeholder="Nombre de la persona" autocomplete="off">
+                            <button type="submit" class="btn btn-primary">+</button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Tax & Tip Card -->
+                <div class="card" style="margin-bottom: 1.5rem;">
+                    <div class="card-header">
+                        <h2 class="card-title">📊 Extras</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="extras-row">
+                            <div class="extras-input">
+                                <label>Impuesto (IVA)</label>
+                                <input type="number" id="tax-input" placeholder="0" step="1">
+                            </div>
+                            <div class="extras-input">
+                                <label>Propina (%)</label>
+                                <input type="number" id="tip-input" placeholder="10" step="1" min="0" max="100">
+                            </div>
+                        </div>
+                        <button class="btn btn-secondary" style="width: 100%;" onclick="updateExtras()">
+                            Actualizar
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Summary Card -->
+                <div class="summary-section">
+                    <div class="summary-row">
+                        <span class="summary-label">Subtotal</span>
+                        <span class="summary-value" id="summary-subtotal">$0</span>
+                    </div>
+                    <div class="summary-row">
+                        <span class="summary-label">Impuesto</span>
+                        <span class="summary-value" id="summary-tax">$0</span>
+                    </div>
+                    <div class="summary-row">
+                        <span class="summary-label">Propina</span>
+                        <span class="summary-value" id="summary-tip">$0</span>
+                    </div>
+                    <div class="summary-row total">
+                        <span>Total</span>
+                        <span id="summary-total">$0</span>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div style="margin-top: 1rem; text-align: center;">
+                    <button class="btn-link" onclick="splitEqually()" style="font-size: 0.8rem; color: var(--accent-soft); background: none; border: none; cursor: pointer; text-decoration: underline;">
+                        ⚡ Dividir en partes iguales
+                    </button>
+                </div>
+
+                <!-- Calculate Button -->
+                <button class="btn btn-primary" style="width: 100%; margin-top: 1rem; padding: 1rem;" onclick="calculateSplits()">
+                    🔗 Generar Links de Pago
+                </button>
+
+                <!-- New Bill Button -->
+                <button class="btn btn-secondary" style="width: 100%; margin-top: 0.75rem;" onclick="newBill()">
+                    📄 Nueva Boleta
+                </button>
+
+                <!-- Share Link Button -->
+                <button class="btn btn-secondary" style="width: 100%; margin-top: 0.75rem;" onclick="copyShareLink()">
+                    🔗 Copiar Link para Editar
+                </button>
+
+                <!-- Participant Link -->
+                <button class="btn btn-secondary" style="width: 100%; margin-top: 0.5rem; background: linear-gradient(135deg, var(--accent), var(--accent-soft));" onclick="copyParticipantLink()">
+                    📤 Copiar Link para Participantes
+                </button>
+
+                <!-- Status Button -->
+                <button id="status-btn" class="btn" style="width: 100%; margin-top: 0.75rem;" onclick="toggleStatus()">
+                    📝 Marcar Lista para Pagar
+                </button>
+
+                <!-- Bills History -->
+                <div class="card" style="margin-top: 1.5rem;">
+                    <div class="card-header" style="padding: 0.75rem 1rem;">
+                        <h2 class="card-title" style="font-size: 0.95rem;">📋 Boletas Guardadas</h2>
+                    </div>
+                    <div class="card-body" style="padding: 0.75rem; max-height: 200px; overflow-y: auto;" id="bills-history">
+                        <p style="color: var(--text-muted); font-size: 0.85rem;">Cargando...</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Assign Modal -->
+    <div class="modal-overlay" id="assign-modal">
+        <div class="modal">
+            <h3 class="modal-title">Asignar item</h3>
+            <p class="modal-subtitle" id="modal-item-name">Nombre del item</p>
+            <div class="modal-people" id="modal-people">
+                <!-- People will be rendered here -->
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeAssignModal()">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Item Modal -->
+    <div class="modal-overlay" id="add-item-modal">
+        <div class="modal">
+            <h3 class="modal-title">Agregar item</h3>
+            <form id="add-item-form" style="margin-top: 1rem;">
+                <div class="extras-input" style="margin-bottom: 1rem;">
+                    <label>Nombre</label>
+                    <input type="text" id="new-item-name" placeholder="Ej: Hamburguesa" required>
+                </div>
+                <div class="extras-row" style="margin-bottom: 1.5rem;">
+                    <div class="extras-input">
+                        <label>Precio</label>
+                        <input type="number" id="new-item-price" placeholder="0" step="1" min="0" required>
+                    </div>
+                    <div class="extras-input">
+                        <label>Cantidad</label>
+                        <input type="number" id="new-item-qty" value="1" step="1" min="1" required>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeAddItemModal()">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Agregar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <script>
+        // State
+        let currentBill = null;
+        let selectedItemId = null;
+        let allBills = [];
+
+        // LocalStorage keys
+        const STORAGE_KEY = 'cobrof_current_bill';
+        const BILLS_STORAGE_KEY = 'cobrof_all_bills';
+
+        // Save current bill to localStorage
+        function saveState() {
+            if (currentBill) {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(currentBill));
+                // Also save to all bills
+                saveBillToHistory(currentBill);
+            } else {
+                localStorage.removeItem(STORAGE_KEY);
+            }
+        }
+
+        // Ensure we have a bill before manual actions (AI scan is optional)
+        async function ensureBillExists() {
+            if (currentBill && currentBill.id) return currentBill;
+
+            const response = await fetch('/api/create-bill', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
+            });
+
+            if (!response.ok) {
+                const err = await response.json().catch(() => ({}));
+                throw new Error(err.detail || 'No se pudo crear una boleta');
+            }
+
+            currentBill = await response.json();
+            saveState();
+            renderBill();
+            return currentBill;
+        }
+
+        // Save bill to history
+        function saveBillToHistory(bill) {
+            loadAllBills();
+            const existingIndex = allBills.findIndex(b => b.id === bill.id);
+            if (existingIndex >= 0) {
+                allBills[existingIndex] = { ...bill, updated_at: new Date().toISOString() };
+            } else {
+                allBills.unshift({ ...bill, updated_at: new Date().toISOString() });
+            }
+            // Keep only last 20 bills
+            allBills = allBills.slice(0, 20);
+            localStorage.setItem(BILLS_STORAGE_KEY, JSON.stringify(allBills));
+            renderBillsHistory();
+        }
+
+        // Load all bills from localStorage
+        function loadAllBills() {
+            try {
+                const saved = localStorage.getItem(BILLS_STORAGE_KEY);
+                if (saved) {
+                    allBills = JSON.parse(saved);
+                }
+            } catch (e) {
+                console.error('Error loading bills:', e);
+                allBills = [];
+            }
+        }
+
+        // Load current state from localStorage
+        function loadState() {
+            try {
+                // Check URL for bill ID first
+                const urlParams = new URLSearchParams(window.location.search);
+                const billId = urlParams.get('bill');
+                
+                if (billId) {
+                    loadAllBills();
+                    const bill = allBills.find(b => b.id === billId);
+                    if (bill) {
+                        currentBill = bill;
+                        return true;
+                    }
+                }
+                
+                const saved = localStorage.getItem(STORAGE_KEY);
+                if (saved) {
+                    currentBill = JSON.parse(saved);
+                    return true;
+                }
+            } catch (e) {
+                console.error('Error loading saved state:', e);
+                localStorage.removeItem(STORAGE_KEY);
+            }
+            return false;
+        }
+
+        // Delete bill from history
+        function deleteBillFromHistory(billId) {
+            loadAllBills();
+            allBills = allBills.filter(b => b.id !== billId);
+            localStorage.setItem(BILLS_STORAGE_KEY, JSON.stringify(allBills));
+            if (currentBill && currentBill.id === billId) {
+                currentBill = null;
+                localStorage.removeItem(STORAGE_KEY);
+                newBill();
+            }
+            renderBillsHistory();
+            showToast('Boleta eliminada', 'success');
+        }
+
+        // Load a bill from history
+        async function loadBillFromHistory(billId) {
+            loadAllBills();
+            const bill = allBills.find(b => b.id === billId);
+            if (bill) {
+                currentBill = bill;
+                // Restore on backend and get recalculated bill
+                try {
+                    const response = await fetch('/api/restore-bill', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(currentBill)
+                    });
+                    const result = await response.json();
+                    if (result.bill) {
+                        currentBill = result.bill;
+                    }
+                } catch (e) {
+                    console.error('Error restoring on backend:', e);
+                    // Recalculate locally if backend fails
+                    recalculateTotals();
+                }
+                saveState();
+                renderBill();
+                // Update URL
+                window.history.pushState({}, '', `?bill=${billId}`);
+                showToast('Boleta cargada', 'success');
+            }
+        }
+
+        // Get shareable link
+        function getShareLink() {
+            if (!currentBill) return '';
+            return `${window.location.origin}${window.location.pathname}?bill=${currentBill.id}`;
+        }
+
+        // Copy share link
+        function copyShareLink() {
+            const link = getShareLink();
+            navigator.clipboard.writeText(link).then(() => {
+                showToast('Link copiado! Compártelo para que otros editen la boleta', 'success');
+            }).catch(() => {
+                showToast('Error al copiar', 'error');
+            });
+        }
+
+        // Copy participant link
+        function copyParticipantLink() {
+            if (!currentBill) return;
+            const link = `${window.location.origin}/bill/${currentBill.id}`;
+            navigator.clipboard.writeText(link).then(() => {
+                showToast('Link para participantes copiado! Compártelo con el grupo 🎉', 'success');
+            }).catch(() => {
+                showToast('Error al copiar', 'error');
+            });
+        }
+
+        // Toggle bill status (draft -> ready -> draft)
+        async function toggleStatus() {
+            if (!currentBill) return;
+            
+            // Default status is 'draft' if not set
+            const currentStatus = currentBill.status || 'draft';
+            const newStatus = currentStatus === 'ready' ? 'draft' : 'ready';
+            
+            try {
+                const response = await fetch(`/api/bill/${currentBill.id}/status`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        bill_id: currentBill.id,
+                        status: newStatus
+                    })
+                });
+                
+                const data = await response.json();
+                currentBill = data.bill;
+                saveState();
+                // Re-render everything so all controls (including title) reflect locked/status changes
+                renderBill();
+                
+                // Show/hide locked banner
+                const lockedBanner = document.getElementById('locked-banner');
+                if (lockedBanner) lockedBanner.style.display = currentBill.locked ? 'block' : 'none';
+                
+                if (newStatus === 'ready') {
+                    showToast('¡Boleta lista! Los participantes ahora pueden pagar 💳', 'success');
+                    calculateSplits(); // Auto calculate when ready
+                } else {
+                    showToast('Boleta en modo borrador - puedes seguir editando', 'success');
+                }
+            } catch (error) {
+                showToast('Error al cambiar estado', 'error');
+            }
+        }
+
+        // Update status button UI
+        function updateStatusUI() {
+            const statusBtn = document.getElementById('status-btn');
+            if (!statusBtn || !currentBill) return;
+            
+            const status = currentBill.status || 'draft';
+            
+            if (status === 'ready') {
+                statusBtn.innerHTML = '✏️ Volver a Borrador';
+                statusBtn.style.background = 'var(--warning)';
+                statusBtn.style.borderColor = 'var(--warning)';
+            } else {
+                statusBtn.innerHTML = '✅ Marcar Lista para Pagar';
+                statusBtn.style.background = 'var(--success)';
+                statusBtn.style.borderColor = 'var(--success)';
+            }
+        }
+
+        // Toggle lock state (keeping for backward compatibility)
+        async function toggleLock() {
+            if (!currentBill) return;
+            
+            const newLockState = !currentBill.locked;
+            
+            try {
+                const response = await fetch('/api/lock-bill', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        bill_id: currentBill.id,
+                        locked: newLockState
+                    })
+                });
+                
+                currentBill = await response.json();
+                saveState();
+                updateLockUI();
+                renderItems();
+                renderPeople();
+                
+                // Show/hide locked banner
+                const lockedBanner = document.getElementById('locked-banner');
+                if (lockedBanner) lockedBanner.style.display = newLockState ? 'block' : 'none';
+                
+                showToast(newLockState ? 'Boleta bloqueada - Marca quién ha pagado abajo ⬇️' : 'Boleta desbloqueada', 'success');
+                
+                // Auto-show payment tracking when locking
+                if (newLockState) {
+                    await calculateSplits();
+                }
+            } catch (error) {
+                showToast('Error al cambiar estado', 'error');
+            }
+        }
+
+        // Update UI based on lock state
+        function updateLockUI() {
+            const lockBtn = document.getElementById('lock-btn');
+            if (!lockBtn || !currentBill) return;
+            
+            if (currentBill.locked) {
+                lockBtn.innerHTML = '🔒 Desbloquear Boleta';
+                lockBtn.classList.remove('btn-secondary');
+                lockBtn.classList.add('btn-primary');
+                lockBtn.style.background = 'var(--warning)';
+                lockBtn.style.borderColor = 'var(--warning)';
+            } else {
+                lockBtn.innerHTML = '🔓 Bloquear Boleta';
+                lockBtn.classList.remove('btn-primary');
+                lockBtn.classList.add('btn-secondary');
+                lockBtn.style.background = '';
+                lockBtn.style.borderColor = '';
+            }
+        }
+
+        // Mark person as paid/unpaid
+        async function togglePaid(personName) {
+            if (!currentBill) return;
+            
+            const isPaid = currentBill.paid_by && currentBill.paid_by.includes(personName);
+            
+            try {
+                const response = await fetch('/api/mark-paid', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        bill_id: currentBill.id,
+                        person_name: personName,
+                        paid: !isPaid
+                    })
+                });
+                
+                currentBill = await response.json();
+                saveState();
+                
+                // Re-render the split results to update checkboxes
+                const splitsResponse = await fetch(`/api/calculate-splits/${currentBill.id}`);
+                const splits = await splitsResponse.json();
+                renderSplitResults(splits);
+                
+                showToast(!isPaid ? `${personName} marcado como pagado` : `${personName} marcado como pendiente`, 'success');
+            } catch (error) {
+                showToast('Error al actualizar pago', 'error');
+            }
+        }
+
+        // Render bills history
+        function renderBillsHistory() {
+            const historyContainer = document.getElementById('bills-history');
+            if (!historyContainer) return;
+            
+            loadAllBills();
+            
+            if (allBills.length === 0) {
+                historyContainer.innerHTML = '<p style="color: var(--text-muted); font-size: 0.85rem; padding: 0.5rem;">Sin boletas guardadas</p>';
+                return;
+            }
+            
+            historyContainer.innerHTML = allBills.map(bill => {
+                const date = new Date(bill.updated_at || bill.created_at);
+                const dateStr = date.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit' });
+                const isActive = currentBill && currentBill.id === bill.id;
+                const title = (bill.title || 'Boleta').toString();
+                
+                return `
+                    <div class="history-item ${isActive ? 'active' : ''}" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: ${isActive ? 'var(--accent)' : 'var(--bg-card)'}; border-radius: 8px; margin-bottom: 0.5rem; cursor: pointer; border: 1px solid ${isActive ? 'var(--accent)' : 'var(--border)'};" onclick="loadBillFromHistory('${bill.id}')">
+                        <div style="flex: 1; min-width: 0;">
+                            <div style="font-size: 0.85rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                ${title} · ${bill.items.length} items · ${bill.people.length} personas
+                            </div>
+                            <div style="font-size: 0.75rem; color: ${isActive ? 'rgba(255,255,255,0.7)' : 'var(--text-muted)'};">
+                                ${dateStr} · $${formatNumber(bill.total)}
+                            </div>
+                        </div>
+                        <button class="btn-icon" onclick="event.stopPropagation(); deleteBillFromHistory('${bill.id}')" style="padding: 0.25rem; font-size: 0.75rem;" title="Eliminar">🗑️</button>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // DOM Elements
+        // New compact upload zone
+        const uploadZoneCompact = document.getElementById('upload-zone-compact');
+        const fileInputCompact = document.getElementById('file-input-compact');
+        const uploadLoading = document.getElementById('upload-loading');
+        const mainContent = document.getElementById('main-content');
+        
+        // Legacy (hidden)
+        const uploadZone = document.getElementById('upload-zone');
+        const fileInput = document.getElementById('file-input');
+        const loading = document.getElementById('loading');
+        const uploadSection = document.getElementById('upload-section');
+
+        // Compact Upload Zone Handling
+        uploadZoneCompact.addEventListener('click', () => fileInputCompact.click());
+        
+        uploadZoneCompact.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadZoneCompact.classList.add('drag-over');
+        });
+        
+        uploadZoneCompact.addEventListener('dragleave', () => {
+            uploadZoneCompact.classList.remove('drag-over');
+        });
+        
+        uploadZoneCompact.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZoneCompact.classList.remove('drag-over');
+            const file = e.dataTransfer.files[0];
+            if (file) handleFileUploadCompact(file);
+        });
+        
+        fileInputCompact.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) handleFileUploadCompact(file);
+        });
+        
+        async function handleFileUploadCompact(file) {
+            uploadZoneCompact.style.display = 'none';
+            uploadLoading.style.display = 'block';
+            
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                const response = await fetch('/api/scan-bill', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Error scanning bill');
+                }
+                
+                currentBill = await response.json();
+                saveState();
+                saveBillToHistory(currentBill);
+                renderBill();
+                showToast('¡Boleta escaneada exitosamente!', 'success');
+                
+                // Update upload zone to show success
+                uploadZoneCompact.classList.add('has-bill');
+                uploadZoneCompact.querySelector('.upload-icon').textContent = '✅';
+                uploadZoneCompact.querySelector('.upload-text').textContent = 'Boleta cargada - Click para subir otra';
+                
+            } catch (error) {
+                console.error('Error:', error);
+                showToast(error.message || 'Error al escanear la boleta', 'error');
+                uploadZoneCompact.classList.remove('has-bill');
+            } finally {
+                uploadLoading.style.display = 'none';
+                uploadZoneCompact.style.display = 'block';
+                fileInputCompact.value = '';
+            }
+        }
+
+        // Legacy File Upload Handling (keep for compatibility)
+        if (uploadZone) uploadZone.addEventListener('click', () => fileInput?.click());
+        
+        if (uploadZone) uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadZone.classList.add('dragover');
+        });
+
+        uploadZone.addEventListener('dragleave', () => {
+            uploadZone.classList.remove('dragover');
+        });
+
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZone.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFileUpload(files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFileUpload(e.target.files[0]);
+            }
+        });
+
+        async function handleFileUpload(file) {
+            if (!file.type.startsWith('image/')) {
+                showToast('Por favor selecciona una imagen', 'error');
+                return;
+            }
+
+            // Show loading
+            uploadZone.style.display = 'none';
+            loading.classList.add('active');
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/api/scan-bill', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Error al escanear la boleta');
+                }
+
+                currentBill = await response.json();
+                renderBill();
+                showToast('Boleta escaneada exitosamente', 'success');
+
+            } catch (error) {
+                console.error('Error:', error);
+                showToast(error.message, 'error');
+                // Reset upload UI so user can try again
+                uploadZone.style.display = 'block';
+                uploadSection.style.display = 'block';
+                fileInput.value = '';  // Reset file input to allow re-selecting same file
+            } finally {
+                loading.classList.remove('active');
+            }
+        }
+
+        function renderBill() {
+            if (!currentBill) return;
+
+            // Save state to localStorage
+            saveState();
+
+            // Update upload zone state
+            if (uploadZoneCompact) {
+                uploadZoneCompact.classList.add('has-bill');
+                uploadZoneCompact.querySelector('.upload-icon').textContent = '✅';
+                uploadZoneCompact.querySelector('.upload-text').textContent = 'Boleta cargada - Click para subir otra';
+            }
+
+            // Render items
+            renderItems();
+
+            // Render people
+            renderPeople();
+
+            // Update summary
+            updateSummary();
+
+            // Update extras inputs
+            document.getElementById('tax-input').value = currentBill.tax || 0;
+            document.getElementById('tip-input').value = currentBill.tip_percent || 0;
+
+            // Update title input
+            const titleInput = document.getElementById('bill-title-input');
+            if (titleInput) titleInput.value = currentBill.title || '';
+
+            // Update lock UI and status UI
+            updateLockUI();
+            updateStatusUI();
+
+            // Disable inputs if locked
+            const isLocked = currentBill.locked || false;
+            document.getElementById('tax-input').disabled = isLocked;
+            document.getElementById('tip-input').disabled = isLocked;
+            // Title remains editable even when locked (useful to rename after "ready to pay")
+            
+            // Hide add item button if locked
+            const addItemBtn = document.getElementById('add-item-btn');
+            if (addItemBtn) addItemBtn.style.display = isLocked ? 'none' : '';
+            
+            // Show/hide locked banner
+            const lockedBanner = document.getElementById('locked-banner');
+            if (lockedBanner) lockedBanner.style.display = isLocked ? 'block' : 'none';
+
+            // Hide split results
+            document.getElementById('split-results').classList.remove('active');
+        }
+
+        function renderItems() {
+            const itemsList = document.getElementById('items-list');
+            const isLocked = currentBill.locked || false;
+            
+            if (currentBill.items.length === 0) {
+                itemsList.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 2rem;">No hay items en la boleta</p>';
+                return;
+            }
+
+            itemsList.innerHTML = currentBill.items.map((item, index) => `
+                <div class="item-row" 
+                     style="animation-delay: ${index * 0.03}s; ${isLocked ? 'opacity: 0.8;' : ''}"
+                     ondragover="handleDragOver(event)"
+                     ondragleave="handleDragLeave(event)"
+                     ondrop="handleDrop(event, '${item.id}')"
+                >
+                    <div class="item-image">
+                        ${getItemEmoji(item.name)}
+                    </div>
+                    <div style="min-width: 0;">
+                        <div class="item-name">
+                            ${item.quantity > 1 ? `<span style="background: var(--accent); color: white; padding: 0.1rem 0.35rem; border-radius: 4px; font-size: 0.7rem; margin-right: 0.4rem;">${item.quantity}x</span>` : ''}
+                            ${item.name}
+                            ${item.quantity > 1 ? `<span style="color: var(--text-muted); font-size: 0.75rem; margin-left: 0.3rem;">($${formatNumber(item.price)} c/u)</span>` : ''}
+                        </div>
+                        <div class="item-assignees">
+                            ${item.assigned_to.map((person, i) => 
+                                `<span class="assignee-badge" onclick="quickUnassign('${item.id}', '${person}')" title="Click para quitar">${person}</span>`
+                            ).join('')}
+                        </div>
+                    </div>
+                    <div class="item-price">$${formatNumber(item.price * item.quantity)}</div>
+                    <div class="item-actions">
+                        ${isLocked ? `<span style="color: var(--warning); font-size: 0.7rem;">🔒</span>` : `
+                        <button class="btn-icon" onclick="openAssignModal('${item.id}')" title="Asignar personas" style="padding: 0.3rem;">
+                            👤
+                        </button>
+                        <button class="btn-icon danger" onclick="deleteItem('${item.id}')" title="Eliminar" style="padding: 0.3rem;">
+                            🗑️
+                        </button>
+                        `}
+                    </div>
+                </div>
+            `).join('');
+            
+        }
+        
+        // Get emoji for item based on name
+        function getItemEmoji(name) {
+            const n = name.toLowerCase();
+            if (n.includes('pizza')) return '🍕';
+            if (n.includes('burger') || n.includes('hambur')) return '🍔';
+            if (n.includes('beer') || n.includes('cerveza')) return '🍺';
+            if (n.includes('wine') || n.includes('vino')) return '🍷';
+            if (n.includes('coffee') || n.includes('café') || n.includes('cafe')) return '☕';
+            if (n.includes('tea') || n.includes('té')) return '🍵';
+            if (n.includes('salad') || n.includes('ensalada')) return '🥗';
+            if (n.includes('pasta') || n.includes('spaghe') || n.includes('fettu')) return '🍝';
+            if (n.includes('sushi')) return '🍣';
+            if (n.includes('taco')) return '🌮';
+            if (n.includes('sandwich') || n.includes('sandwi')) return '🥪';
+            if (n.includes('dessert') || n.includes('postre') || n.includes('cake') || n.includes('torta')) return '🍰';
+            if (n.includes('ice') || n.includes('helado')) return '🍨';
+            if (n.includes('fries') || n.includes('papas') || n.includes('frita')) return '🍟';
+            if (n.includes('chicken') || n.includes('pollo')) return '🍗';
+            if (n.includes('fish') || n.includes('pescado') || n.includes('salmon')) return '🐟';
+            if (n.includes('steak') || n.includes('carne') || n.includes('beef') || n.includes('lomo')) return '🥩';
+            if (n.includes('soup') || n.includes('sopa')) return '🍲';
+            if (n.includes('bread') || n.includes('pan')) return '🍞';
+            if (n.includes('egg') || n.includes('huevo')) return '🥚';
+            if (n.includes('water') || n.includes('agua')) return '💧';
+            if (n.includes('juice') || n.includes('jugo')) return '🧃';
+            if (n.includes('soda') || n.includes('cola') || n.includes('sprite') || n.includes('fanta')) return '🥤';
+            if (n.includes('cocktail') || n.includes('drink') || n.includes('trago')) return '🍹';
+            if (n.includes('propina') || n.includes('tip')) return '💰';
+            if (n.includes('service') || n.includes('servicio')) return '🍽️';
+            return '🍽️';
+        }
+        
+
+        function renderPeople() {
+            const peopleGrid = document.getElementById('people-grid');
+            const isLocked = currentBill.locked || false;
+            
+            // Disable add person input when locked
+            const personInput = document.getElementById('person-name-input');
+            // In our form, the submit button is the next sibling of the input
+            const addPersonBtn = personInput?.nextElementSibling;
+            if (personInput) personInput.disabled = isLocked;
+            if (addPersonBtn) addPersonBtn.disabled = isLocked;
+            
+            if (currentBill.people.length === 0) {
+                peopleGrid.innerHTML = '<p style="color: var(--text-muted); font-size: 0.9rem;">Agrega personas para dividir la cuenta</p>';
+                return;
+            }
+
+            peopleGrid.innerHTML = currentBill.people.map((person, index) => `
+                <div class="person-chip" 
+                     style="${isLocked ? 'opacity: 0.8;' : 'cursor: grab;'}"
+                     ${isLocked ? '' : `draggable="true" 
+                     ondragstart="handleDragStart(event, '${person}')" 
+                     ondragend="handleDragEnd(event)"`}
+                     title="${isLocked ? '' : 'Arrastra a un item para asignar'}">
+                    <div class="person-avatar avatar-${(index % 6) + 1}">${person.charAt(0)}</div>
+                    <span>${person}</span>
+                    ${isLocked ? '' : `<span class="remove-person" onclick="removePerson('${person}')">✕</span>`}
+                </div>
+            `).join('');
+        }
+
+        // Recalculate all totals (useful for fixing inconsistencies)
+        function recalculateTotals() {
+            if (!currentBill) return;
+            
+            // Recalculate subtotal from items
+            currentBill.subtotal = currentBill.items.reduce((sum, item) => {
+                return sum + (item.price * item.quantity);
+            }, 0);
+            
+            // Recalculate tip if percentage is set
+            if (currentBill.tip_percent > 0) {
+                currentBill.tip = currentBill.subtotal * (currentBill.tip_percent / 100);
+            }
+            
+            // Recalculate total
+            currentBill.total = currentBill.subtotal + currentBill.tax + currentBill.tip;
+        }
+
+        function updateSummary() {
+            document.getElementById('summary-subtotal').textContent = `$${formatNumber(currentBill.subtotal)}`;
+            document.getElementById('summary-tax').textContent = `$${formatNumber(currentBill.tax)}`;
+            const tipPercent = currentBill.tip_percent || 0;
+            const tipText = tipPercent > 0 ? `$${formatNumber(currentBill.tip)} (${tipPercent}%)` : '$0';
+            document.getElementById('summary-tip').textContent = tipText;
+            document.getElementById('summary-total').textContent = `$${formatNumber(currentBill.total)}`;
+            // Save state after summary update
+            saveState();
+        }
+
+        // Add Person
+        document.getElementById('add-person-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const input = document.getElementById('person-name-input');
+            const name = input.value.trim();
+            
+            if (!name) return;
+
+            try {
+                await ensureBillExists();
+                const response = await fetch('/api/add-person', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ bill_id: currentBill.id, person_name: name })
+                });
+
+                currentBill = await response.json();
+                renderPeople();
+                saveState();
+                input.value = '';
+                showToast(`${name} agregado`, 'success');
+
+            } catch (error) {
+                showToast('Error al agregar persona', 'error');
+            }
+        });
+
+        async function removePerson(name) {
+            try {
+                const response = await fetch('/api/remove-person', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ bill_id: currentBill.id, person_name: name })
+                });
+
+                currentBill = await response.json();
+                renderPeople();
+                renderItems();
+                saveState();
+
+            } catch (error) {
+                showToast('Error al eliminar persona', 'error');
+            }
+        }
+
+        // Assign Modal
+        function openAssignModal(itemId) {
+            selectedItemId = itemId;
+            const item = currentBill.items.find(i => i.id === itemId);
+            
+            document.getElementById('modal-item-name').textContent = item.name;
+            
+            const modalPeople = document.getElementById('modal-people');
+            
+            if (currentBill.people.length === 0) {
+                modalPeople.innerHTML = '<p style="color: var(--text-muted); text-align: center;">Primero agrega personas</p>';
+            } else {
+                modalPeople.innerHTML = currentBill.people.map((person, index) => `
+                    <div class="modal-person ${item.assigned_to.includes(person) ? 'selected' : ''}" onclick="toggleAssignment('${person}')">
+                        <div class="modal-person-check">
+                            ${item.assigned_to.includes(person) ? '✓' : ''}
+                        </div>
+                        <div class="person-avatar avatar-${(index % 6) + 1}">${person.charAt(0)}</div>
+                        <span>${person}</span>
+                    </div>
+                `).join('');
+            }
+
+            document.getElementById('assign-modal').classList.add('active');
+        }
+
+        function closeAssignModal() {
+            document.getElementById('assign-modal').classList.remove('active');
+            selectedItemId = null;
+        }
+
+        async function toggleAssignment(personName) {
+            try {
+                const response = await fetch('/api/assign-item', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        bill_id: currentBill.id,
+                        item_id: selectedItemId,
+                        person_name: personName
+                    })
+                });
+
+                currentBill = await response.json();
+                renderItems();
+                saveState();
+                openAssignModal(selectedItemId); // Refresh modal
+
+            } catch (error) {
+                showToast('Error al asignar', 'error');
+            }
+        }
+
+        // Add Item Modal
+        function openAddItemModal() {
+            document.getElementById('add-item-modal').classList.add('active');
+            document.getElementById('new-item-name').focus();
+        }
+
+        function closeAddItemModal() {
+            document.getElementById('add-item-modal').classList.remove('active');
+            document.getElementById('add-item-form').reset();
+        }
+
+        document.getElementById('add-item-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const name = document.getElementById('new-item-name').value.trim();
+            const price = parseFloat(document.getElementById('new-item-price').value);
+            const qty = parseInt(document.getElementById('new-item-qty').value, 10);
+
+            if (!name || isNaN(price) || !Number.isFinite(qty) || qty < 1) return;
+
+            try {
+                await ensureBillExists();
+                const response = await fetch('/api/add-item', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        bill_id: currentBill.id,
+                        name: name,
+                        price: price,
+                        quantity: qty
+                    })
+                });
+
+                currentBill = await response.json();
+                renderItems();
+                updateSummary();
+                closeAddItemModal();
+                showToast('Item agregado', 'success');
+
+            } catch (error) {
+                showToast('Error al agregar item', 'error');
+            }
+        });
+
+        async function deleteItem(itemId) {
+            try {
+                const response = await fetch(`/api/item/${currentBill.id}/${itemId}`, {
+                    method: 'DELETE'
+                });
+
+                currentBill = await response.json();
+                renderItems();
+                updateSummary();
+
+            } catch (error) {
+                showToast('Error al eliminar item', 'error');
+            }
+        }
+
+        // Update Extras
+        async function updateExtras() {
+            const tax = parseFloat(document.getElementById('tax-input').value) || 0;
+            const tipPercent = parseFloat(document.getElementById('tip-input').value) || 0;
+
+            try {
+                await ensureBillExists();
+                const response = await fetch('/api/update-tip-tax', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        bill_id: currentBill.id,
+                        tax: tax,
+                        tip_percent: tipPercent
+                    })
+                });
+
+                currentBill = await response.json();
+                updateSummary();
+                showToast('Extras actualizados', 'success');
+
+            } catch (error) {
+                showToast('Error al actualizar', 'error');
+            }
+        }
+
+        // Quick unassign person from item (click on badge)
+        async function quickUnassign(itemId, personName) {
+            if (!currentBill || currentBill.locked) {
+                if (currentBill?.locked) showToast('La boleta está bloqueada', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/assign-item', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        bill_id: currentBill.id,
+                        item_id: itemId,
+                        person_name: personName
+                    })
+                });
+                
+                currentBill = await response.json();
+                saveState();
+                renderItems();
+            } catch (error) {
+                showToast('Error al quitar persona', 'error');
+            }
+        }
+        
+        // Drag and drop handlers
+        function handleDragStart(e, personName) {
+            e.dataTransfer.setData('text/plain', personName);
+            e.dataTransfer.effectAllowed = 'copy';
+            e.target.style.opacity = '0.5';
+        }
+        
+        function handleDragEnd(e) {
+            e.target.style.opacity = '1';
+            document.querySelectorAll('.item-row').forEach(row => {
+                row.classList.remove('drag-over');
+            });
+        }
+        
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+            e.currentTarget.classList.add('drag-over');
+        }
+        
+        function handleDragLeave(e) {
+            e.currentTarget.classList.remove('drag-over');
+        }
+        
+        async function handleDrop(e, itemId) {
+            e.preventDefault();
+            e.currentTarget.classList.remove('drag-over');
+            
+            const personName = e.dataTransfer.getData('text/plain');
+            if (!personName || !currentBill || currentBill.locked) return;
+            
+            // Check if already assigned
+            const item = currentBill.items.find(i => i.id === itemId);
+            if (item && item.assigned_to.includes(personName)) {
+                return; // Already assigned
+            }
+            
+            try {
+                const response = await fetch('/api/assign-item', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        bill_id: currentBill.id,
+                        item_id: itemId,
+                        person_name: personName
+                    })
+                });
+                
+                currentBill = await response.json();
+                saveState();
+                renderItems();
+                showToast(`${personName} agregado`, 'success');
+            } catch (error) {
+                showToast('Error al asignar', 'error');
+            }
+        }
+
+        // Split bill equally among all people
+        async function splitEqually() {
+            if (!currentBill) return;
+            
+            if (currentBill.locked) {
+                showToast('La boleta está bloqueada', 'error');
+                return;
+            }
+            
+            if (currentBill.people.length === 0) {
+                showToast('Agrega personas primero', 'error');
+                return;
+            }
+            
+            // Assign all people to all items
+            for (const item of currentBill.items) {
+                item.assigned_to = [...currentBill.people];
+            }
+            
+            // Save to backend
+            try {
+                await fetch('/api/restore-bill', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(currentBill)
+                });
+            } catch (e) {}
+            
+            saveState();
+            renderItems();
+            showToast(`Dividido en ${currentBill.people.length} partes iguales`, 'success');
+        }
+
+        // Calculate Splits
+        async function calculateSplits() {
+            // Check if there are people and assignments
+            if (currentBill.people.length === 0) {
+                showToast('Agrega personas primero', 'error');
+                return;
+            }
+
+            const hasAssignments = currentBill.items.some(item => item.assigned_to.length > 0);
+            if (!hasAssignments) {
+                showToast('Asigna items a las personas', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/calculate-splits/${currentBill.id}`);
+                const splits = await response.json();
+
+                renderSplitResults(splits);
+                document.getElementById('split-results').classList.add('active');
+                
+                // Scroll to results
+                document.getElementById('split-results').scrollIntoView({ behavior: 'smooth' });
+
+            } catch (error) {
+                showToast('Error al calcular', 'error');
+            }
+        }
+
+        function renderSplitResults(splits) {
+            const splitCards = document.getElementById('split-cards');
+            const people = Object.keys(splits.person_totals);
+
+            // Calculate what each person consumed
+            function getPersonItems(personName) {
+                const items = [];
+                currentBill.items.forEach(item => {
+                    if (item.assigned_to.includes(personName)) {
+                        const splitCount = item.assigned_to.length;
+                        const itemTotal = (item.price * item.quantity) / splitCount;
+                        items.push({
+                            name: item.name,
+                            quantity: item.quantity,
+                            total: itemTotal,
+                            shared: splitCount > 1 ? splitCount : 0
+                        });
+                    }
+                });
+                return items;
+            }
+
+            // Build compact payment links table with paid status
+            const isLocked = currentBill.locked || false;
+            const paidBy = currentBill.paid_by || [];
+            
+            // Count paid/pending
+            const paidCount = people.filter(p => paidBy.includes(p) && splits.person_totals[p] > 0).length;
+            const pendingCount = people.filter(p => !paidBy.includes(p) && splits.person_totals[p] > 0).length;
+            const totalPaid = people.filter(p => paidBy.includes(p)).reduce((sum, p) => sum + (splits.person_totals[p] || 0), 0);
+            const totalPending = people.filter(p => !paidBy.includes(p)).reduce((sum, p) => sum + (splits.person_totals[p] || 0), 0);
+            
+            let cardsHtml = '';
+            
+            // Show payment summary when locked
+            if (isLocked) {
+                cardsHtml += `
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                        <div style="background: var(--success); color: white; padding: 1rem; border-radius: 12px; text-align: center;">
+                            <div style="font-size: 1.5rem; font-weight: 600;">${paidCount}</div>
+                            <div style="font-size: 0.85rem; opacity: 0.9;">Pagado ($${formatNumber(totalPaid)})</div>
+                        </div>
+                        <div style="background: var(--warning); color: white; padding: 1rem; border-radius: 12px; text-align: center;">
+                            <div style="font-size: 1.5rem; font-weight: 600;">${pendingCount}</div>
+                            <div style="font-size: 0.85rem; opacity: 0.9;">Pendiente ($${formatNumber(totalPending)})</div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            cardsHtml += `
+                <div style="background: var(--bg-card); border-radius: 16px; border: 1px solid var(--border); overflow: hidden;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <thead>
+                            <tr style="background: var(--bg-elevated);">
+                                ${isLocked ? '<th style="padding: 1rem; text-align: center; font-weight: 500; width: 60px;">Pagó</th>' : ''}
+                                <th style="padding: 1rem; text-align: left; font-weight: 500;">Persona</th>
+                                <th style="padding: 1rem; text-align: right; font-weight: 500;">Monto</th>
+                                <th style="padding: 1rem; text-align: center; font-weight: 500;">Link</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+
+            people.forEach((person, index) => {
+                const amount = splits.person_totals[person];
+                const link = splits.payment_links[person];
+                if (amount === 0) return;
+                
+                const isPaid = paidBy.includes(person);
+                const rowStyle = isPaid ? 'background: rgba(var(--success-rgb), 0.1);' : '';
+
+                cardsHtml += `
+                    <tr style="border-top: 1px solid var(--border); ${rowStyle}">
+                        ${isLocked ? `
+                        <td style="padding: 0.75rem 1rem; text-align: center;">
+                            <label class="paid-checkbox" style="cursor: pointer; display: flex; justify-content: center; align-items: center;">
+                                <input type="checkbox" ${isPaid ? 'checked' : ''} onchange="togglePaid('${person}')" style="width: 20px; height: 20px; cursor: pointer; accent-color: var(--success);">
+                            </label>
+                        </td>
+                        ` : ''}
+                        <td style="padding: 0.75rem 1rem;">
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <div class="split-avatar avatar-${(index % 6) + 1}" style="width: 28px; height: 28px; font-size: 0.75rem;">${person.charAt(0)}</div>
+                                <span style="${isPaid ? 'text-decoration: line-through; opacity: 0.7;' : ''}">${person}</span>
+                                ${isPaid ? '<span style="background: var(--success); color: white; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.7rem; margin-left: 0.5rem;">✓ Pagado</span>' : ''}
+                            </div>
+                        </td>
+                        <td style="padding: 0.75rem 1rem; text-align: right; font-family: 'JetBrains Mono', monospace; color: ${isPaid ? 'var(--text-muted)' : 'var(--success)'}; font-weight: 500; ${isPaid ? 'text-decoration: line-through;' : ''}">
+                            $${formatNumber(amount)}
+                        </td>
+                        <td style="padding: 0.5rem 1rem; text-align: center;">
+                            <div style="display: flex; gap: 0.5rem; justify-content: center;">
+                                <a href="${link}" target="_blank" class="btn btn-sm ${isPaid ? 'btn-secondary' : 'btn-primary'}" style="padding: 0.4rem 0.75rem; font-size: 0.8rem;">${isPaid ? '✓' : '💳 Pagar'}</a>
+                                <button class="btn btn-sm btn-secondary" onclick="copyLink('${link}')" style="padding: 0.4rem 0.75rem; font-size: 0.8rem;">📋</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            cardsHtml += `
+                        </tbody>
+                    </table>
+                </div>
+            `;
+
+            // Build detailed WhatsApp message with item breakdown
+            const whatsappLines = people
+                .filter(person => splits.person_totals[person] > 0)
+                .map(person => {
+                    const amount = splits.person_totals[person];
+                    const link = splits.payment_links[person];
+                    const personItems = getPersonItems(person);
+                    
+                    // Build items detail
+                    const itemsDetail = personItems.map(item => {
+                        let detail = `  - ${item.name}`;
+                        if (item.quantity > 1) detail += ` (${item.quantity}x)`;
+                        if (item.shared > 0) detail += ` ÷${item.shared}`;
+                        detail += `: $${formatNumber(item.total)}`;
+                        return detail;
+                    }).join('\n');
+                    
+                    return `👤 *${person}*\n${itemsDetail}\n  📍 Subtotal items: $${formatNumber(personItems.reduce((s, i) => s + i.total, 0))}\n  📍 + Proporcional (IVA/Propina)\n  💰 *Total: $${formatNumber(amount)}*\n  🔗 ${link}`;
+                });
+            
+            const whatsappMessage = `🧾 *División de cuenta*\n\n${whatsappLines.join('\n\n───────────\n\n')}\n\n───────────\n💸 *TOTAL CUENTA: $${formatNumber(splits.bill_total)}*`;
+            
+            // Add WhatsApp share section
+            cardsHtml += `
+                <div class="whatsapp-share-section" style="margin-top: 1.5rem; padding: 1.5rem; background: var(--bg-card); border-radius: 16px; border: 1px solid var(--border);">
+                    <h3 style="margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                        📱 Compartir por WhatsApp
+                    </h3>
+                    <textarea id="whatsapp-text" readonly style="width: 100%; min-height: 250px; padding: 1rem; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 10px; color: var(--text-primary); font-family: inherit; font-size: 0.85rem; resize: vertical; margin-bottom: 1rem; white-space: pre-wrap;">${whatsappMessage}</textarea>
+                    <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+                        <button class="btn btn-primary" onclick="copyAllLinks()" style="flex: 1;">
+                            📋 Copiar todo
+                        </button>
+                        <a href="https://wa.me/?text=${encodeURIComponent(whatsappMessage)}" target="_blank" class="btn btn-secondary" style="flex: 1; text-align: center; text-decoration: none; background: #25D366; border-color: #25D366; color: white;">
+                            💬 Abrir WhatsApp
+                        </a>
+                    </div>
+                </div>
+            `;
+
+            splitCards.innerHTML = cardsHtml;
+        }
+        
+        function copyAllLinks() {
+            const text = document.getElementById('whatsapp-text').value;
+            navigator.clipboard.writeText(text).then(() => {
+                showToast('Mensaje copiado al portapapeles', 'success');
+            }).catch(() => {
+                showToast('Error al copiar', 'error');
+            });
+        }
+
+        function copyLink(link) {
+            navigator.clipboard.writeText(link).then(() => {
+                showToast('Link copiado al portapapeles', 'success');
+            }).catch(() => {
+                showToast('Error al copiar', 'error');
+            });
+        }
+
+        function newBill() {
+            currentBill = null;
+            localStorage.removeItem(STORAGE_KEY);  // Clear current bill
+            
+            // Reset upload zone
+            if (uploadZoneCompact) {
+                uploadZoneCompact.classList.remove('has-bill');
+                uploadZoneCompact.querySelector('.upload-icon').textContent = '📸';
+                uploadZoneCompact.querySelector('.upload-text').textContent = 'Sube una foto de tu boleta para escanearla con IA';
+            }
+            
+            // Reset items list
+            const itemsList = document.getElementById('items-list');
+            if (itemsList) {
+                itemsList.innerHTML = '<p id="empty-items-msg" style="color: var(--text-muted); text-align: center; padding: 2rem;">Sube una boleta o agrega items manualmente</p>';
+            }
+            
+            document.getElementById('split-results').classList.remove('active');
+            fileInputCompact.value = '';
+
+            // Reset title input
+            const titleInput = document.getElementById('bill-title-input');
+            if (titleInput) titleInput.value = '';
+            
+            // Clear URL params
+            window.history.pushState({}, '', window.location.pathname);
+            renderBillsHistory();
+
+            // Create a blank bill so you can start manually (scan is optional)
+            ensureBillExists().catch(() => {});
+        }
+
+        // Utility Functions
+        function formatNumber(num) {
+            return Math.round(num).toLocaleString('es-CL');
+        }
+
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.innerHTML = `
+                <span>${type === 'success' ? '✓' : '⚠'}</span>
+                <span>${message}</span>
+            `;
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.style.animation = 'fadeIn 0.3s ease-out reverse';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // Close modals on outside click
+        document.querySelectorAll('.modal-overlay').forEach(overlay => {
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) {
+                    overlay.classList.remove('active');
+                }
+            });
+        });
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                document.querySelectorAll('.modal-overlay').forEach(overlay => {
+                    overlay.classList.remove('active');
+                });
+            }
+        });
+
+        // Page load - restore saved state
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Always load and render bills history
+            loadAllBills();
+            
+            if (loadState()) {
+                // Also restore on backend so API calls work
+                try {
+                    const response = await fetch('/api/restore-bill', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(currentBill)
+                    });
+                    const result = await response.json();
+                    if (result.bill) {
+                        currentBill = result.bill;
+                        saveState();  // Save recalculated bill
+                    }
+                    renderBill();
+                    
+                    // Check if loaded from URL
+                    const urlParams = new URLSearchParams(window.location.search);
+                    if (urlParams.get('bill')) {
+                        showToast('Boleta cargada desde link', 'success');
+                    } else {
+                        showToast('Sesión anterior restaurada', 'success');
+                    }
+                } catch (error) {
+                    console.error('Error restoring bill on backend:', error);
+                    // Recalculate locally if backend fails
+                    recalculateTotals();
+                    renderBill();
+                    showToast('Sesión restaurada (modo offline)', 'success');
+                }
+            }
+            
+            // Render history in sidebar (if visible)
+            renderBillsHistory();
+        });
+
+        // Bill title form
+        document.getElementById('bill-title-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            try {
+                await ensureBillExists();
+            } catch (e) {
+                showToast(e.message || 'Error creando boleta', 'error');
+                return;
+            }
+
+            const input = document.getElementById('bill-title-input');
+            const title = (input?.value || '').trim();
+            if (!title) {
+                showToast('El título no puede estar vacío', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/update-title', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ bill_id: currentBill.id, title })
+                });
+
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({}));
+                    throw new Error(err.detail || 'Error al guardar título');
+                }
+
+                currentBill = await response.json();
+                saveState();
+                renderBillsHistory();
+                showToast('Título guardado', 'success');
+            } catch (error) {
+                showToast(error.message || 'Error al guardar título', 'error');
+            }
+        });
+    </script>
+
+    <!-- Help Button (always visible) -->
+    <button id="help-btn" onclick="restartTutorial()" title="Ver tutorial" style="
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #6366f1, #8b5cf6);
+        border: none;
+        color: white;
+        font-size: 1.5rem;
+        font-weight: bold;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9000;
+        box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4);
+        transition: transform 0.2s, box-shadow 0.2s;
+    " onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">?</button>
+
+    <!-- Tutorial Module (self-contained: CSS + HTML + JS) -->
+    <script src="/static/js/tutorial.js"></script>
+    <script>
+        let appTutorial = null;
+        
+        function restartTutorial() {
+            if (appTutorial) {
+                appTutorial.reset();
+                appTutorial.start();
+            }
+        }
+        
+        // Initialize tutorial when DOM is ready
+        document.addEventListener('DOMContentLoaded', () => {
+            appTutorial = new Tutorial([
+                {
+                    element: '#upload-zone-compact',
+                    title: '📸 Sube tu boleta',
+                    description: 'Arrastra o haz clic aquí para subir una foto de tu boleta. La IA extraerá automáticamente los items y precios.',
+                    position: 'right'
+                },
+                {
+                    element: '#items-card-header',
+                    title: '➕ O agrega manualmente',
+                    description: 'Usa el botón "+ Agregar" para añadir items uno por uno con su nombre y precio.',
+                    position: 'bottom'
+                },
+                {
+                    element: '#add-person-form',
+                    title: '👥 Agrega personas',
+                    description: 'Escribe los nombres de quienes van a dividir la cuenta y presiona + para agregarlos.',
+                    position: 'left'
+                },
+                {
+                    element: '#people-grid',
+                    title: '✋ Arrastra para asignar',
+                    description: 'Arrastra las personas hacia los items de la boleta. También puedes hacer clic en los badges para quitarlos.',
+                    position: 'left'
+                },
+                {
+                    element: '#lock-btn',
+                    title: '🔒 Bloquea cuando termines',
+                    description: 'Bloquea la boleta para poder marcar quién ya pagó y evitar cambios accidentales.',
+                    position: 'left'
+                },
+                {
+                    element: null,
+                    title: '🎉 ¡Listo para dividir!',
+                    description: 'Genera los links de pago y compártelos por WhatsApp. Cada persona verá exactamente cuánto debe.',
+                    position: 'center'
+                }
+            ], {
+                storageKey: 'divvy_tutorial_done',
+                autoStart: true,
+                autoStartDelay: 800,
+                showHelpButton: false,  // Using our own button
+                onComplete: () => {
+                    showToast('¡Tutorial completado! 🎉', 'success');
+                    console.log('Tutorial completed, saved to localStorage');
+                },
+                onSkip: () => showToast('Puedes ver el tutorial con el botón ?', 'info')
+            });
+        });
+    </script>
+</body>
+</html>
+

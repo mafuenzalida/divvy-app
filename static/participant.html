@@ -1,0 +1,1275 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Divvy - Ver Cuenta</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #12121a;
+            --bg-card: #1a1a24;
+            --bg-elevated: #22222e;
+            --text-primary: #f5f5f5;
+            --text-secondary: #a0a0b0;
+            --text-muted: #6b6b80;
+            --border: #2d2d3d;
+            --accent: #6366f1;
+            --accent-soft: #818cf8;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.4;
+        }
+
+        .container {
+            max-width: 480px;
+            margin: 0 auto;
+            padding: 1rem;
+        }
+
+        /* Header - Compact */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .bill-title {
+            margin-top: 0.4rem;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent), var(--accent-soft));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .bill-status {
+            padding: 0.25rem 0.6rem;
+            border-radius: 15px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .status-draft { background: rgba(107, 107, 128, 0.2); color: var(--text-muted); }
+        .status-ready { background: rgba(16, 185, 129, 0.2); color: var(--success); }
+        .status-closed { background: rgba(239, 68, 68, 0.2); color: var(--danger); }
+
+        /* Cards - Compact */
+        .card {
+            background: var(--bg-card);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            margin-bottom: 0.75rem;
+            overflow: hidden;
+        }
+
+        .card-header {
+            padding: 0.6rem 0.85rem;
+            border-bottom: 1px solid var(--border);
+            font-weight: 600;
+            font-size: 0.85rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .card-body {
+            padding: 0.6rem 0.85rem;
+        }
+
+        /* Identity Selection */
+        .identity-section {
+            text-align: center;
+            padding: 1.25rem 0.75rem;
+        }
+
+        .identity-title {
+            font-size: 1rem;
+            margin-bottom: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .people-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.4rem;
+            justify-content: center;
+            margin-bottom: 1rem;
+        }
+
+        .person-btn {
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            border: 2px solid var(--border);
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .person-btn:hover {
+            border-color: var(--accent);
+            background: rgba(99, 102, 241, 0.1);
+        }
+
+        .divider {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin: 1rem 0;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+        }
+
+        .divider::before,
+        .divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--border);
+        }
+
+        .join-form {
+            display: flex;
+            gap: 0.4rem;
+            max-width: 280px;
+            margin: 0 auto;
+        }
+
+        .join-form input {
+            flex: 1;
+            padding: 0.6rem 0.85rem;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+            font-size: 0.9rem;
+        }
+
+        .join-form input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .btn {
+            padding: 0.6rem 1rem;
+            border-radius: 8px;
+            border: none;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.85rem;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-soft);
+        }
+
+        /* Your Total - Compact */
+        .your-total {
+            background: linear-gradient(135deg, var(--accent), var(--accent-soft));
+            color: white;
+            padding: 1rem;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+        }
+
+        .your-total-label {
+            font-size: 0.85rem;
+            opacity: 0.9;
+        }
+
+        .your-total-amount {
+            font-size: 1.75rem;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Pay Section */
+        .pay-section {
+            margin-bottom: 0.75rem;
+        }
+
+        .pay-btn {
+            display: block;
+            width: 100%;
+            padding: 0.85rem;
+            background: var(--success);
+            color: white;
+            text-align: center;
+            text-decoration: none;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 1rem;
+            transition: all 0.2s;
+        }
+
+        .pay-btn:hover {
+            background: #0d9668;
+            transform: translateY(-1px);
+        }
+
+        .pay-btn.disabled {
+            background: var(--bg-elevated);
+            color: var(--text-muted);
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        .pay-link-display {
+            margin-top: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            background: var(--bg-elevated);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem;
+        }
+
+        .pay-link-url {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            color: var(--accent-soft);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            flex: 1;
+        }
+
+        .copy-link-btn {
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 0.35rem 0.6rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.7rem;
+            white-space: nowrap;
+        }
+
+        .copy-link-btn:hover {
+            background: var(--accent-soft);
+        }
+
+        /* Mark as Paid Button */
+        .mark-paid-btn {
+            width: 100%;
+            margin-top: 0.5rem;
+            padding: 0.75rem;
+            border-radius: 10px;
+            border: 2px solid var(--success);
+            background: transparent;
+            color: var(--success);
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .mark-paid-btn:hover {
+            background: var(--success);
+            color: white;
+        }
+
+        .mark-paid-btn.paid {
+            background: var(--success);
+            color: white;
+            border-color: var(--success);
+        }
+
+        .mark-paid-btn.paid:hover {
+            background: transparent;
+            color: var(--success);
+        }
+
+        /* Items List - Scrollable */
+        .items-container {
+            max-height: 220px;
+            overflow-y: auto;
+            margin: -0.6rem -0.85rem;
+            padding: 0.4rem 0.85rem;
+        }
+
+        .items-container::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .items-container::-webkit-scrollbar-track {
+            background: var(--bg-elevated);
+            border-radius: 3px;
+        }
+
+        .items-container::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 3px;
+        }
+
+        .items-container::-webkit-scrollbar-thumb:hover {
+            background: var(--text-muted);
+        }
+
+        .item-row {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .item-row:last-child {
+            border-bottom: none;
+        }
+
+        .item-checkbox {
+            width: 20px;
+            height: 20px;
+            border-radius: 5px;
+            border: 2px solid var(--border);
+            background: var(--bg-elevated);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s;
+            flex-shrink: 0;
+        }
+
+        .item-checkbox:hover {
+            border-color: var(--accent);
+        }
+
+        .item-checkbox.checked {
+            background: var(--accent);
+            border-color: var(--accent);
+        }
+
+        .item-checkbox.checked::after {
+            content: '✓';
+            color: white;
+            font-size: 0.7rem;
+        }
+
+        .item-checkbox.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .item-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .item-name {
+            font-weight: 500;
+            font-size: 0.85rem;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .item-qty {
+            background: var(--accent);
+            color: white;
+            padding: 0.05rem 0.35rem;
+            border-radius: 4px;
+            font-size: 0.65rem;
+        }
+
+        .item-assignees {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            margin-top: 0.1rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .item-price {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 500;
+            font-size: 0.8rem;
+            color: var(--accent-soft);
+        }
+
+        /* Breakdown Section */
+        .breakdown-container {
+            max-height: 150px;
+            overflow-y: auto;
+        }
+
+        .breakdown-container::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .breakdown-container::-webkit-scrollbar-track {
+            background: var(--bg-elevated);
+            border-radius: 3px;
+        }
+
+        .breakdown-container::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 3px;
+        }
+
+        .breakdown-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.4rem 0;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.8rem;
+        }
+
+        .breakdown-item:last-child {
+            border-bottom: none;
+        }
+
+        .breakdown-item-name {
+            color: var(--text-primary);
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .breakdown-item-shared {
+            color: var(--text-muted);
+            font-size: 0.7rem;
+            margin-left: 0.5rem;
+        }
+
+        .breakdown-item-price {
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--accent-soft);
+            margin-left: 0.75rem;
+        }
+
+        .breakdown-totals {
+            margin-top: 0.5rem;
+            padding-top: 0.5rem;
+            border-top: 1px solid var(--border);
+        }
+
+        .breakdown-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.2rem 0;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .breakdown-row.total {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-top: 0.3rem;
+            padding-top: 0.3rem;
+            border-top: 1px dashed var(--border);
+        }
+
+        .breakdown-empty {
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            padding: 0.5rem;
+        }
+
+        /* Summary - Compact */
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.3rem 0;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .summary-row.total {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            border-top: 1px solid var(--border);
+            margin-top: 0.3rem;
+            padding-top: 0.5rem;
+        }
+
+        /* Others - Compact Scrollable */
+        .others-container {
+            max-height: 150px;
+            overflow-y: auto;
+            margin: -0.4rem -0.85rem;
+            padding: 0.2rem 0.85rem;
+        }
+
+        .others-container::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .others-container::-webkit-scrollbar-track {
+            background: var(--bg-elevated);
+            border-radius: 3px;
+        }
+
+        .others-container::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 3px;
+        }
+
+        .other-person {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.35rem 0;
+        }
+
+        .other-name {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            font-size: 0.85rem;
+        }
+
+        .other-avatar {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.65rem;
+            font-weight: 600;
+            color: white;
+        }
+
+        .paid-badge {
+            background: var(--success);
+            color: white;
+            padding: 0.1rem 0.4rem;
+            border-radius: 8px;
+            font-size: 0.6rem;
+        }
+
+        .other-amount {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            color: var(--accent-soft);
+        }
+
+        .me-highlight {
+            background: rgba(99, 102, 241, 0.1);
+            margin: 0 -0.5rem;
+            padding: 0.35rem 0.5rem;
+            border-radius: 6px;
+        }
+
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-muted);
+        }
+
+        .spinner {
+            width: 36px;
+            height: 36px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 0.75rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(80px);
+            padding: 0.6rem 1.25rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            opacity: 0;
+            transition: all 0.3s;
+            z-index: 1000;
+        }
+
+        .toast.show {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+
+        .toast.success { background: var(--success); color: white; }
+        .toast.error { background: var(--danger); color: white; }
+
+        /* Not found */
+        .not-found {
+            text-align: center;
+            padding: 3rem 1.5rem;
+        }
+
+        .not-found-icon {
+            font-size: 3rem;
+            margin-bottom: 0.75rem;
+        }
+
+        /* Change identity link */
+        .change-identity {
+            text-align: center;
+            margin-top: 0.75rem;
+        }
+
+        .change-identity button {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.8rem;
+            text-decoration: underline;
+        }
+
+        /* Avatar colors */
+        .avatar-1 { background: linear-gradient(135deg, #6366f1, #818cf8); }
+        .avatar-2 { background: linear-gradient(135deg, #10b981, #34d399); }
+        .avatar-3 { background: linear-gradient(135deg, #f59e0b, #fbbf24); }
+        .avatar-4 { background: linear-gradient(135deg, #ef4444, #ec4899); }
+        .avatar-5 { background: linear-gradient(135deg, #3b82f6, #06b6d4); }
+        .avatar-6 { background: linear-gradient(135deg, #8b5cf6, #d946ef); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Loading State -->
+        <div id="loading-state" class="loading">
+            <div class="spinner"></div>
+            <p>Cargando cuenta...</p>
+        </div>
+
+        <!-- Not Found State -->
+        <div id="not-found-state" style="display: none;" class="not-found">
+            <div class="not-found-icon">🔍</div>
+            <h2>Cuenta no encontrada</h2>
+            <p style="color: var(--text-muted); margin-top: 0.5rem; font-size: 0.9rem;">El link puede estar incorrecto o la cuenta fue eliminada.</p>
+        </div>
+
+        <!-- Main Content -->
+        <div id="main-content" style="display: none;">
+            <!-- Header -->
+                <div class="header">
+                    <div style="min-width: 0;">
+                        <div class="logo">Divvy</div>
+                        <div id="bill-title" class="bill-title"></div>
+                    </div>
+                    <div id="bill-status" class="bill-status status-draft">📝 Borrador</div>
+                </div>
+
+            <!-- Identity Selection -->
+            <div id="identity-section" class="card">
+                <div class="identity-section">
+                    <div class="identity-title">¿Quién eres?</div>
+                    <div class="people-buttons" id="people-buttons"></div>
+                    <div id="join-section">
+                        <div class="divider">o únete como nuevo</div>
+                        <form class="join-form" id="join-form" onsubmit="handleJoin(event)">
+                            <input type="text" id="new-name" placeholder="Tu nombre" autocomplete="off">
+                            <button type="submit" class="btn btn-primary">Unirme</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bill View -->
+            <div id="bill-view" style="display: none;">
+                <!-- Your Total -->
+                <div class="your-total">
+                    <div class="your-total-label">Tu total</div>
+                    <div class="your-total-amount" id="your-amount">$0</div>
+                </div>
+
+                <!-- Pay Section -->
+                <div class="pay-section">
+                    <a href="#" id="pay-btn" class="pay-btn disabled" target="_blank">
+                        Esperando confirmación...
+                    </a>
+                    <div class="pay-link-display" id="pay-link-display" style="display: none;">
+                        <span class="pay-link-url" id="pay-link-url"></span>
+                        <button class="copy-link-btn" onclick="copyPayLink()">📋 Copiar</button>
+                    </div>
+                    <!-- Mark as Paid Button -->
+                    <button id="mark-paid-btn" class="mark-paid-btn" onclick="toggleMyPaidStatus()" style="display: none;">
+                        ✅ Ya pagué
+                    </button>
+                </div>
+
+                <!-- Items -->
+                <div class="card">
+                    <div class="card-header">
+                        🧾 Selecciona lo que consumiste
+                        <span id="items-count" style="font-size: 0.75rem; color: var(--text-muted);"></span>
+                    </div>
+                    <div class="card-body">
+                        <div class="items-container" id="items-list"></div>
+                    </div>
+                </div>
+
+                <!-- Your Breakdown -->
+                <div class="card" id="my-breakdown-card" style="display: none;">
+                    <div class="card-header">
+                        🧮 Tu desglose
+                    </div>
+                    <div class="card-body">
+                        <div class="breakdown-container" id="my-breakdown"></div>
+                        <div class="breakdown-totals" id="breakdown-totals"></div>
+                    </div>
+                </div>
+
+                <!-- Bill Summary -->
+                <div class="card">
+                    <div class="card-header">📊 Resumen</div>
+                    <div class="card-body">
+                        <div class="summary-row">
+                            <span>Subtotal</span>
+                            <span id="summary-subtotal">$0</span>
+                        </div>
+                        <div class="summary-row">
+                            <span>Propina</span>
+                            <span id="summary-tip">$0</span>
+                        </div>
+                        <div class="summary-row">
+                            <span>Impuestos</span>
+                            <span id="summary-tax">$0</span>
+                        </div>
+                        <div class="summary-row total">
+                            <span>Total cuenta</span>
+                            <span id="summary-total">$0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Others' Totals -->
+                <div class="card">
+                    <div class="card-header">👥 Participantes</div>
+                    <div class="card-body">
+                        <div class="others-container" id="others-list"></div>
+                    </div>
+                </div>
+
+                <!-- Change Identity -->
+                <div class="change-identity">
+                    <button onclick="changeIdentity()">Cambiar identidad</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="toast"></div>
+
+    <script>
+        const pathParts = window.location.pathname.split('/');
+        const billId = pathParts[pathParts.length - 1];
+
+        let billData = null;
+        let currentIdentity = null;
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            await loadBill();
+            
+            const savedIdentity = localStorage.getItem(`divvy_identity_${billId}`);
+            if (savedIdentity && billData?.bill?.people?.includes(savedIdentity)) {
+                selectIdentity(savedIdentity);
+            }
+        });
+
+        async function loadBill() {
+            try {
+                const response = await fetch(`/api/bill/${billId}/participant`);
+                
+                if (!response.ok) {
+                    document.getElementById('loading-state').style.display = 'none';
+                    document.getElementById('not-found-state').style.display = 'block';
+                    return;
+                }
+
+                billData = await response.json();
+                console.log('Bill data:', billData); // Debug
+                
+                document.getElementById('loading-state').style.display = 'none';
+                document.getElementById('main-content').style.display = 'block';
+                
+                renderBillStatus();
+                renderPeopleButtons();
+                renderSummary();
+                
+            } catch (error) {
+                console.error('Error loading bill:', error);
+                document.getElementById('loading-state').style.display = 'none';
+                document.getElementById('not-found-state').style.display = 'block';
+            }
+        }
+
+        function renderBillStatus() {
+            const statusEl = document.getElementById('bill-status');
+            const titleEl = document.getElementById('bill-title');
+            const status = billData.bill.status || 'draft';
+            const isLocked = billData.bill.locked || false;
+            
+            statusEl.className = 'bill-status';
+
+            if (titleEl) {
+                titleEl.textContent = (billData.bill.title || 'Boleta').toString();
+            }
+            
+            if (status === 'closed') {
+                statusEl.classList.add('status-closed');
+                statusEl.textContent = '🔒 Cerrada';
+            } else if (status === 'ready') {
+                statusEl.classList.add('status-ready');
+                statusEl.textContent = '✅ Lista para pagar';
+            } else if (isLocked) {
+                statusEl.classList.add('status-closed');
+                statusEl.textContent = '🔒 Bloqueada';
+            } else {
+                statusEl.classList.add('status-draft');
+                statusEl.textContent = '📝 En preparación';
+            }
+        }
+
+        function renderPeopleButtons() {
+            const container = document.getElementById('people-buttons');
+            const joinSection = document.getElementById('join-section');
+            const people = billData.bill.people || [];
+            const isLocked = billData.bill.locked || false;
+            
+            if (people.length === 0) {
+                container.innerHTML = '<p style="color: var(--text-muted); font-size: 0.85rem;">Aún no hay participantes</p>';
+            } else {
+                container.innerHTML = people.map(person => `
+                    <button class="person-btn" onclick="selectIdentity('${escapeHtml(person)}')">${escapeHtml(person)}</button>
+                `).join('');
+            }
+            
+            // Hide join form if bill is locked
+            if (joinSection) {
+                if (isLocked) {
+                    joinSection.innerHTML = `
+                        <div style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 0.5rem;">
+                            🔒 La cuenta está bloqueada - solo puedes identificarte como participante existente
+                        </div>
+                    `;
+                } else {
+                    joinSection.innerHTML = `
+                        <div class="divider">o únete como nuevo</div>
+                        <form class="join-form" id="join-form" onsubmit="handleJoin(event)">
+                            <input type="text" id="new-name" placeholder="Tu nombre" autocomplete="off">
+                            <button type="submit" class="btn btn-primary">Unirme</button>
+                        </form>
+                    `;
+                }
+            }
+        }
+
+        function selectIdentity(name) {
+            currentIdentity = name;
+            localStorage.setItem(`divvy_identity_${billId}`, name);
+            
+            document.getElementById('identity-section').style.display = 'none';
+            document.getElementById('bill-view').style.display = 'block';
+            
+            renderItems();
+            renderYourTotal();
+            renderMyBreakdown();
+            renderOthers();
+            updatePayButton();
+        }
+
+        function changeIdentity() {
+            currentIdentity = null;
+            localStorage.removeItem(`divvy_identity_${billId}`);
+            
+            document.getElementById('identity-section').style.display = 'block';
+            document.getElementById('bill-view').style.display = 'none';
+        }
+
+        async function handleJoin(e) {
+            e.preventDefault();
+            
+            const nameInput = document.getElementById('new-name');
+            if (!nameInput) return;
+            
+            const name = nameInput.value.trim();
+            if (!name) return;
+            
+            try {
+                const response = await fetch(`/api/bill/${billId}/join`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ bill_id: billId, person_name: name })
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    showToast(error.detail || 'Error al unirse', 'error');
+                    return;
+                }
+                
+                // Reload bill to get updated data
+                await loadBill();
+                showToast('¡Te uniste a la cuenta!', 'success');
+                selectIdentity(name);
+                
+            } catch (error) {
+                showToast('Error al unirse', 'error');
+            }
+        }
+
+        function renderItems() {
+            const container = document.getElementById('items-list');
+            const bill = billData.bill;
+            const items = bill.items || [];
+            const isLocked = bill.locked || false;
+            const isClosed = (bill.status || 'draft') === 'closed';
+            const canEdit = !isLocked && !isClosed;
+            
+            // Update items count
+            const myItems = items.filter(i => i.assigned_to?.includes(currentIdentity)).length;
+            const lockIndicator = !canEdit ? ' 🔒' : '';
+            document.getElementById('items-count').textContent = `${myItems}/${items.length} seleccionados${lockIndicator}`;
+            
+            container.innerHTML = items.map(item => {
+                const isAssigned = item.assigned_to?.includes(currentIdentity) || false;
+                const assignees = item.assigned_to?.length > 0 
+                    ? item.assigned_to.join(', ') 
+                    : 'Sin asignar';
+                
+                return `
+                    <div class="item-row">
+                        <div class="item-checkbox ${isAssigned ? 'checked' : ''} ${!canEdit ? 'disabled' : ''}" 
+                             onclick="${canEdit ? `toggleItem('${item.id}', ${!isAssigned})` : ''}">
+                        </div>
+                        <div class="item-info">
+                            <div class="item-name">
+                                ${item.quantity > 1 ? `<span class="item-qty">${item.quantity}x</span>` : ''}
+                                ${escapeHtml(item.name)}
+                            </div>
+                            <div class="item-assignees">${escapeHtml(assignees)}</div>
+                        </div>
+                        <div class="item-price">$${formatNumber(item.price * item.quantity)}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function toggleItem(itemId, assign) {
+            try {
+                const response = await fetch(`/api/bill/${billId}/self-assign`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        bill_id: billId,
+                        person_name: currentIdentity,
+                        item_id: itemId,
+                        assigned: assign
+                    })
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    showToast(error.detail || 'Error', 'error');
+                    return;
+                }
+                
+                await loadBill();
+                selectIdentity(currentIdentity);
+                
+            } catch (error) {
+                showToast('Error al actualizar', 'error');
+            }
+        }
+
+        function renderYourTotal() {
+            const total = billData.person_totals?.[currentIdentity] || 0;
+            document.getElementById('your-amount').textContent = `$${formatNumber(total)}`;
+        }
+
+        function renderMyBreakdown() {
+            const card = document.getElementById('my-breakdown-card');
+            const container = document.getElementById('my-breakdown');
+            const totalsContainer = document.getElementById('breakdown-totals');
+            const bill = billData.bill;
+            const items = bill.items || [];
+            
+            // Get items assigned to current user
+            const myItems = items.filter(item => item.assigned_to?.includes(currentIdentity));
+            
+            if (myItems.length === 0) {
+                card.style.display = 'none';
+                return;
+            }
+            
+            card.style.display = 'block';
+            
+            // Calculate item shares
+            let subtotal = 0;
+            const itemsHtml = myItems.map(item => {
+                const totalPrice = item.price * item.quantity;
+                const numPeople = item.assigned_to.length;
+                const myShare = totalPrice / numPeople;
+                subtotal += myShare;
+                
+                const sharedText = numPeople > 1 ? `÷${numPeople}` : '';
+                
+                return `
+                    <div class="breakdown-item">
+                        <span class="breakdown-item-name">
+                            ${item.quantity > 1 ? `${item.quantity}x ` : ''}${escapeHtml(item.name)}
+                            ${sharedText ? `<span class="breakdown-item-shared">${sharedText}</span>` : ''}
+                        </span>
+                        <span class="breakdown-item-price">$${formatNumber(myShare)}</span>
+                    </div>
+                `;
+            }).join('');
+            
+            container.innerHTML = itemsHtml;
+            
+            // Calculate proportional tip and tax
+            const billSubtotal = bill.subtotal || 0;
+            let myTip = 0;
+            let myTax = 0;
+            
+            if (billSubtotal > 0) {
+                const proportion = subtotal / billSubtotal;
+                myTip = (bill.tip || 0) * proportion;
+                myTax = (bill.tax || 0) * proportion;
+            }
+            
+            const myTotal = subtotal + myTip + myTax;
+            
+            // Render totals
+            totalsContainer.innerHTML = `
+                <div class="breakdown-row">
+                    <span>Subtotal items</span>
+                    <span>$${formatNumber(subtotal)}</span>
+                </div>
+                ${myTip > 0 ? `
+                <div class="breakdown-row">
+                    <span>+ Propina (${bill.tip_percent || 0}%)</span>
+                    <span>$${formatNumber(myTip)}</span>
+                </div>
+                ` : ''}
+                ${myTax > 0 ? `
+                <div class="breakdown-row">
+                    <span>+ Impuestos</span>
+                    <span>$${formatNumber(myTax)}</span>
+                </div>
+                ` : ''}
+                <div class="breakdown-row total">
+                    <span>Tu total</span>
+                    <span>$${formatNumber(myTotal)}</span>
+                </div>
+            `;
+        }
+
+        function updatePayButton() {
+            const payBtn = document.getElementById('pay-btn');
+            const payLinkDisplay = document.getElementById('pay-link-display');
+            const payLinkUrl = document.getElementById('pay-link-url');
+            const markPaidBtn = document.getElementById('mark-paid-btn');
+            const status = billData.bill.status || 'draft';
+            const total = billData.person_totals?.[currentIdentity] || 0;
+            const link = billData.payment_links?.[currentIdentity];
+            const paidBy = billData.bill.paid_by || [];
+            const hasPaid = paidBy.includes(currentIdentity);
+            
+            // Update mark-paid button
+            if (total > 0) {
+                markPaidBtn.style.display = 'block';
+                if (hasPaid) {
+                    markPaidBtn.className = 'mark-paid-btn paid';
+                    markPaidBtn.textContent = '✓ Pagado - Click para desmarcar';
+                } else {
+                    markPaidBtn.className = 'mark-paid-btn';
+                    markPaidBtn.textContent = '✅ Marcar como pagado';
+                }
+            } else {
+                markPaidBtn.style.display = 'none';
+            }
+            
+            if (total > 0 && link) {
+                payLinkDisplay.style.display = 'flex';
+                payLinkUrl.textContent = link;
+                
+                if (hasPaid) {
+                    payBtn.className = 'pay-btn disabled';
+                    payBtn.style.background = 'var(--success)';
+                    payBtn.style.color = 'white';
+                    payBtn.textContent = '✓ ¡Gracias por pagar!';
+                } else if (status === 'ready') {
+                    payBtn.href = link;
+                    payBtn.className = 'pay-btn';
+                    payBtn.style.background = '';
+                    payBtn.style.color = '';
+                    payBtn.textContent = `💳 Pagar $${formatNumber(total)}`;
+                } else if (status === 'closed') {
+                    payBtn.className = 'pay-btn disabled';
+                    payBtn.style.background = '';
+                    payBtn.style.color = '';
+                    payBtn.textContent = '🔒 Cuenta cerrada';
+                } else {
+                    payBtn.href = '#';
+                    payBtn.className = 'pay-btn disabled';
+                    payBtn.style.background = '';
+                    payBtn.style.color = '';
+                    payBtn.textContent = `⏳ Tu total: $${formatNumber(total)} - Esperando confirmación`;
+                }
+            } else {
+                payLinkDisplay.style.display = 'none';
+                markPaidBtn.style.display = 'none';
+                payBtn.className = 'pay-btn disabled';
+                payBtn.style.background = '';
+                payBtn.style.color = '';
+                payBtn.textContent = total === 0 ? 'Selecciona tus items' : 'Calculando...';
+            }
+        }
+
+        async function toggleMyPaidStatus() {
+            const paidBy = billData.bill.paid_by || [];
+            const hasPaid = paidBy.includes(currentIdentity);
+            
+            try {
+                const response = await fetch('/api/mark-paid', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        bill_id: billId,
+                        person_name: currentIdentity,
+                        paid: !hasPaid
+                    })
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    showToast(error.detail || 'Error', 'error');
+                    return;
+                }
+                
+                // Reload bill data
+                await loadBill();
+                selectIdentity(currentIdentity);
+                
+                showToast(hasPaid ? 'Desmarcado como pagado' : '¡Marcado como pagado! 🎉', 'success');
+                
+            } catch (error) {
+                showToast('Error al actualizar', 'error');
+            }
+        }
+
+        function copyPayLink() {
+            const link = billData.payment_links?.[currentIdentity];
+            if (link) {
+                navigator.clipboard.writeText(link).then(() => {
+                    showToast('Link de pago copiado! 💳', 'success');
+                }).catch(() => {
+                    showToast('Error al copiar', 'error');
+                });
+            }
+        }
+
+        function renderSummary() {
+            const bill = billData.bill;
+            document.getElementById('summary-subtotal').textContent = `$${formatNumber(bill.subtotal || 0)}`;
+            document.getElementById('summary-tip').textContent = `$${formatNumber(bill.tip || 0)}`;
+            document.getElementById('summary-tax').textContent = `$${formatNumber(bill.tax || 0)}`;
+            document.getElementById('summary-total').textContent = `$${formatNumber(bill.total || 0)}`;
+        }
+
+        function renderOthers() {
+            const container = document.getElementById('others-list');
+            const people = billData.bill.people || [];
+            const paidBy = billData.bill.paid_by || [];
+            
+            container.innerHTML = people.map((person, i) => {
+                const total = billData.person_totals?.[person] || 0;
+                const isPaid = paidBy.includes(person);
+                const isMe = person === currentIdentity;
+                
+                return `
+                    <div class="other-person ${isMe ? 'me-highlight' : ''}">
+                        <div class="other-name">
+                            <div class="other-avatar avatar-${(i % 6) + 1}">${person.charAt(0).toUpperCase()}</div>
+                            <span>${escapeHtml(person)}${isMe ? ' (tú)' : ''}</span>
+                            ${isPaid ? '<span class="paid-badge">✓ Pagado</span>' : ''}
+                        </div>
+                        <span class="other-amount">$${formatNumber(total)}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Utility functions
+        function formatNumber(num) {
+            return Math.round(num).toLocaleString('es-CL');
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, '&amp;')
+                      .replace(/</g, '&lt;')
+                      .replace(/>/g, '&gt;')
+                      .replace(/"/g, '&quot;')
+                      .replace(/'/g, '&#039;');
+        }
+
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = `toast ${type} show`;
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+    </script>
+</body>
+</html>
