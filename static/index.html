@@ -1022,6 +1022,22 @@
                     </div>
                 </div>
 
+                <!-- Fintoc Username Card -->
+                <div class="card" style="margin-bottom: 1.5rem;">
+                    <div class="card-header">
+                        <h2 class="card-title">💳 Fintoc</h2>
+                    </div>
+                    <div class="card-body">
+                        <form id="fintoc-username-form" style="display: flex; gap: 0.5rem;">
+                            <input type="text" id="fintoc-username-input" placeholder="tu_usuario_fintoc" style="flex: 1; padding: 0.75rem 1rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; color: var(--text-primary); font-family: inherit; font-size: 0.9rem;">
+                            <button type="submit" class="btn btn-secondary" style="padding: 0.75rem 1rem;">Guardar</button>
+                        </form>
+                        <p style="margin-top: 0.5rem; color: var(--text-muted); font-size: 0.8rem;">
+                            Tu usuario de <a href="https://fintoc.me" target="_blank" style="color: var(--primary);">fintoc.me</a> para generar links de pago.
+                        </p>
+                    </div>
+                </div>
+
                 <!-- People Card -->
                 <div class="card" style="margin-bottom: 1.5rem;">
                     <div class="card-header">
@@ -1768,6 +1784,10 @@
             // Update title input
             const titleInput = document.getElementById('bill-title-input');
             if (titleInput) titleInput.value = currentBill.title || '';
+
+            // Update fintoc username input
+            const fintocInput = document.getElementById('fintoc-username-input');
+            if (fintocInput) fintocInput.value = currentBill.fintoc_username || '';
 
             // Update lock UI and status UI
             updateLockUI();
@@ -2581,6 +2601,40 @@
                 showToast('Título guardado', 'success');
             } catch (error) {
                 showToast(error.message || 'Error al guardar título', 'error');
+            }
+        });
+
+        // Fintoc username form
+        document.getElementById('fintoc-username-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            try {
+                await ensureBillExists();
+            } catch (e) {
+                showToast(e.message || 'Error creando boleta', 'error');
+                return;
+            }
+
+            const input = document.getElementById('fintoc-username-input');
+            const username = (input?.value || '').trim();
+
+            try {
+                const response = await fetch('/api/update-fintoc-username', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ bill_id: currentBill.id, fintoc_username: username })
+                });
+
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({}));
+                    throw new Error(err.detail || 'Error al guardar usuario');
+                }
+
+                currentBill = await response.json();
+                saveState();
+                renderBill();
+                showToast(username ? 'Usuario Fintoc guardado' : 'Usuario Fintoc eliminado', 'success');
+            } catch (error) {
+                showToast(error.message || 'Error al guardar usuario Fintoc', 'error');
             }
         });
     </script>

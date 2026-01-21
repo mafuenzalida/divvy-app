@@ -42,8 +42,8 @@ app.add_middleware(
 # In-memory storage for bills (loaded from file on startup)
 bills_storage: dict = {}
 
-# Fintoc configuration
-FINTOC_USERNAME = "mfuenzalida"
+# Fintoc configuration (can be overridden per-bill)
+FINTOC_USERNAME = os.getenv("FINTOC_USERNAME", "")
 
 # App password protection (optional)
 APP_PASSWORD = os.getenv("APP_PASSWORD", "")
@@ -86,6 +86,7 @@ class Bill(BaseModel):
     locked: bool = False  # When locked, no modifications allowed
     status: str = "draft"  # draft, ready, closed
     created_at: str
+    fintoc_username: str = ""  # Fintoc username for payment links
 
 
 def load_bills_from_storage():
@@ -129,6 +130,11 @@ class UpdateTipTaxRequest(BaseModel):
 class UpdateBillTitleRequest(BaseModel):
     bill_id: str
     title: str
+
+
+class UpdateFintocUsernameRequest(BaseModel):
+    bill_id: str
+    fintoc_username: str
 
 
 class CreateBillRequest(BaseModel):
@@ -615,6 +621,22 @@ async def update_bill_title(request: UpdateBillTitleRequest):
     return bill
 
 
+@app.post("/api/update-fintoc-username")
+async def update_fintoc_username(request: UpdateFintocUsernameRequest):
+    """Update Fintoc username for payment links."""
+    if request.bill_id not in bills_storage:
+        raise HTTPException(status_code=404, detail="Bill not found")
+
+    bill = bills_storage[request.bill_id]
+    
+    # Clean the username (remove @ if present, trim whitespace)
+    username = request.fintoc_username.strip().lstrip('@')
+    
+    bill.fintoc_username = username
+    save_bill(bill)
+    return bill
+
+
 @app.post("/api/add-person")
 async def add_person(request: AddPersonRequest):
     """Add a person to a bill."""
@@ -816,11 +838,13 @@ async def get_bill_for_participant(bill_id: str):
             proportion = person_totals[person] / bill.subtotal
             person_totals[person] += (bill.tip * proportion) + (bill.tax * proportion)
     
-    # Generate payment links
+    # Generate payment links (only if fintoc_username is set)
     payment_links = {}
-    for person, total in person_totals.items():
-        rounded = round(total)
-        payment_links[person] = f"https://fintoc.me/{FINTOC_USERNAME}/{rounded}"
+    fintoc_user = bill.fintoc_username or FINTOC_USERNAME
+    if fintoc_user:
+        for person, total in person_totals.items():
+            rounded = round(total)
+            payment_links[person] = f"https://fintoc.me/{fintoc_user}/{rounded}"
     
     return {
         "bill": bill,
@@ -945,13 +969,15 @@ async def calculate_splits(bill_id: str):
     # Round to 2 decimal places
     person_totals = {k: round(v, 2) for k, v in person_totals.items()}
     
-    # Generate Fintoc payment links
+    # Generate Fintoc payment links (only if fintoc_username is set)
     payment_links = {}
-    for person, total in person_totals.items():
-        if total > 0:
-            # Round to integer for the link (Fintoc uses integer amounts)
-            amount = int(round(total))
-            payment_links[person] = f"https://fintoc.me/{FINTOC_USERNAME}/{amount}"
+    fintoc_user = bill.fintoc_username or FINTOC_USERNAME
+    if fintoc_user:
+        for person, total in person_totals.items():
+            if total > 0:
+                # Round to integer for the link (Fintoc uses integer amounts)
+                amount = int(round(total))
+                payment_links[person] = f"https://fintoc.me/{fintoc_user}/{amount}"
     
     return {
         "bill_id": bill_id,
