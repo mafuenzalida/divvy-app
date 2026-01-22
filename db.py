@@ -78,6 +78,30 @@ def load_all_bills() -> dict:
     return {}
 
 
+def get_bill(bill_id: str) -> dict:
+    """Get a single bill from storage (fresh from DB)."""
+    if USE_TURSO:
+        client = _get_turso_client()
+        if client:
+            try:
+                result = client.execute("SELECT data FROM bills WHERE id = ?", [bill_id])
+                if result.rows:
+                    return json.loads(result.rows[0][0])
+            except Exception as e:
+                print(f"Error getting bill from Turso: {e}")
+    
+    # Fallback to JSON file
+    try:
+        if os.path.exists(BILLS_FILE):
+            with open(BILLS_FILE, 'r') as f:
+                bills = json.load(f)
+                return bills.get(bill_id)
+    except Exception as e:
+        print(f"Error getting bill from file: {e}")
+    
+    return None
+
+
 def save_bill(bill_id: str, bill_data: dict):
     """Save a single bill to storage."""
     if USE_TURSO:

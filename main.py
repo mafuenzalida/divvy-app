@@ -104,6 +104,7 @@ def save_bill(bill):
     """Save a single bill to storage."""
     bills_storage[bill.id] = bill
     database.save_bill(bill.id, bill.model_dump())
+    print(f"💾 Saved bill {bill.id}: {len(bill.people)} people, {len(bill.items)} items")
 
 
 # Load bills on startup
@@ -565,8 +566,17 @@ async def scan_bill(file: UploadFile = File(...)):
 
 
 @app.get("/api/bill/{bill_id}")
-async def get_bill(bill_id: str):
-    """Get a bill by ID."""
+async def get_bill(bill_id: str, fresh: bool = False):
+    """Get a bill by ID. Use ?fresh=true to fetch directly from database."""
+    if fresh:
+        # Fetch fresh from database (ensures we see participant changes)
+        bill_data = database.get_bill(bill_id)
+        if bill_data:
+            bill = Bill(**bill_data)
+            bills_storage[bill_id] = bill  # Update memory cache
+            return bill
+        raise HTTPException(status_code=404, detail="Bill not found")
+    
     if bill_id not in bills_storage:
         raise HTTPException(status_code=404, detail="Bill not found")
     return bills_storage[bill_id]

@@ -1767,13 +1767,15 @@
             if (!currentBill || !currentBill.id) return;
             
             try {
-                const response = await fetch(`/api/bill/${currentBill.id}`);
+                // Use ?fresh=true to get data directly from database (not memory cache)
+                const response = await fetch(`/api/bill/${currentBill.id}?fresh=true`);
                 if (response.ok) {
                     const serverBill = await response.json();
                     // Update currentBill with server data
                     currentBill = serverBill;
                     saveState();
                     renderBill();
+                    console.log('Bill refreshed from server');
                 }
             } catch (e) {
                 console.log('Refresh failed (offline?):', e);
@@ -1782,8 +1784,8 @@
         
         function startAutoRefresh() {
             if (refreshInterval) clearInterval(refreshInterval);
-            // Refresh every 5 seconds
-            refreshInterval = setInterval(refreshBillFromServer, 5000);
+            // Refresh every 30 seconds (less expensive)
+            refreshInterval = setInterval(refreshBillFromServer, 30000);
         }
         
         function stopAutoRefresh() {
