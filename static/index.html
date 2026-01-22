@@ -1114,6 +1114,11 @@
                     📄 Nueva Boleta
                 </button>
 
+                <!-- Refresh Button (to see participant changes) -->
+                <button class="btn btn-secondary" style="width: 100%; margin-top: 0.75rem;" onclick="refreshBillFromServer(); showToast('Boleta actualizada', 'success');">
+                    🔄 Actualizar (ver cambios de participantes)
+                </button>
+
                 <!-- Share Link Button -->
                 <button class="btn btn-secondary" style="width: 100%; margin-top: 0.75rem;" onclick="copyShareLink()">
                     🔗 Copiar Link para Editar
@@ -1755,8 +1760,44 @@
             }
         }
 
+        // Refresh bill from server (to see participant changes)
+        let refreshInterval = null;
+        
+        async function refreshBillFromServer() {
+            if (!currentBill || !currentBill.id) return;
+            
+            try {
+                const response = await fetch(`/api/bill/${currentBill.id}`);
+                if (response.ok) {
+                    const serverBill = await response.json();
+                    // Update currentBill with server data
+                    currentBill = serverBill;
+                    saveState();
+                    renderBill();
+                }
+            } catch (e) {
+                console.log('Refresh failed (offline?):', e);
+            }
+        }
+        
+        function startAutoRefresh() {
+            if (refreshInterval) clearInterval(refreshInterval);
+            // Refresh every 5 seconds
+            refreshInterval = setInterval(refreshBillFromServer, 5000);
+        }
+        
+        function stopAutoRefresh() {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+                refreshInterval = null;
+            }
+        }
+
         function renderBill() {
             if (!currentBill) return;
+            
+            // Start auto-refresh when viewing a bill
+            startAutoRefresh();
 
             // Save state to localStorage
             saveState();
@@ -2446,6 +2487,7 @@
         }
 
         function newBill() {
+            stopAutoRefresh();  // Stop refreshing when starting fresh
             currentBill = null;
             localStorage.removeItem(STORAGE_KEY);  // Clear current bill
             
