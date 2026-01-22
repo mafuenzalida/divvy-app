@@ -809,6 +809,16 @@
     <!-- Toast -->
     <div id="toast" class="toast"></div>
 
+    <!-- Quantity Modal (for multi-unit items) -->
+    <div id="qty-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center;">
+        <div style="background: var(--bg-card); border-radius: 16px; padding: 1.5rem; max-width: 320px; width: 90%; text-align: center; border: 1px solid var(--border);">
+            <h3 style="margin-bottom: 0.5rem; font-size: 1.1rem;">¿Cuántos consumiste?</h3>
+            <p id="qty-item-name" style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem;"></p>
+            <div id="qty-buttons" style="display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap; margin-bottom: 1rem;"></div>
+            <button onclick="closeQtyModal()" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.85rem;">Cancelar</button>
+        </div>
+    </div>
+
     <script>
         const pathParts = window.location.pathname.split('/');
         const billId = pathParts[pathParts.length - 1];
@@ -981,22 +991,47 @@
             document.getElementById('items-count').textContent = `${myItems}/${items.length} seleccionados${lockIndicator}`;
             
             container.innerHTML = items.map(item => {
-                const isAssigned = item.assigned_to?.includes(currentIdentity) || false;
-                const assignees = item.assigned_to?.length > 0 
-                    ? item.assigned_to.join(', ') 
+                // Count how many units current user has claimed
+                const myClaims = item.assigned_to?.filter(p => p === currentIdentity).length || 0;
+                const isAssigned = myClaims > 0;
+                const totalClaims = item.assigned_to?.length || 0;
+                
+                // Build assignees text with claim counts
+                const assigneeCounts = {};
+                (item.assigned_to || []).forEach(p => {
+                    assigneeCounts[p] = (assigneeCounts[p] || 0) + 1;
+                });
+                const assigneesText = Object.keys(assigneeCounts).length > 0
+                    ? Object.entries(assigneeCounts).map(([name, count]) => 
+                        item.quantity > 1 && count > 0 ? `${name} (${count})` : name
+                      ).join(', ')
                     : 'Sin asignar';
+                
+                // For multi-quantity items, show how many units claimed
+                const claimedIndicator = item.quantity > 1 && myClaims > 0 
+                    ? `<span style="color: var(--success); font-size: 0.7rem; margin-left: 4px;">${myClaims}/${item.quantity}</span>` 
+                    : '';
+                
+                // Determine click action: for multi-qty items, show modal; for single items, toggle
+                const clickAction = canEdit 
+                    ? (item.quantity > 1 
+                        ? `showQtyModal('${item.id}', '${escapeHtml(item.name)}', ${item.quantity}, ${myClaims}, ${totalClaims})`
+                        : `toggleItem('${item.id}', ${!isAssigned}, 1)`)
+                    : '';
                 
                 return `
                     <div class="item-row">
                         <div class="item-checkbox ${isAssigned ? 'checked' : ''} ${!canEdit ? 'disabled' : ''}" 
-                             onclick="${canEdit ? `toggleItem('${item.id}', ${!isAssigned})` : ''}">
+                             onclick="${clickAction}">
+                             ${myClaims > 1 ? `<span style="font-size: 0.6rem;">${myClaims}</span>` : ''}
                         </div>
                         <div class="item-info">
                             <div class="item-name">
                                 ${item.quantity > 1 ? `<span class="item-qty">${item.quantity}x</span>` : ''}
                                 ${escapeHtml(item.name)}
+                                ${claimedIndicator}
                             </div>
-                            <div class="item-assignees">${escapeHtml(assignees)}</div>
+                            <div class="item-assignees">${escapeHtml(assigneesText)}</div>
                         </div>
                         <div class="item-price">$${formatNumber(item.price * item.quantity)}</div>
                     </div>
@@ -1004,7 +1039,61 @@
             }).join('');
         }
 
-        async function toggleItem(itemId, assign) {
+        // For multi-quantity items: show modal to select how many
+        let pendingItemId = null;
+        let pendingItemQty = null;
+        
+        function showQtyModal(itemId, itemName, totalQty, myClaims, totalClaims) {
+            pendingItemId = itemId;
+            pendingItemQty = totalQty;
+            
+            const modal = document.getElementById('qty-modal');
+            const itemNameEl = document.getElementById('qty-item-name');
+            const buttonsEl = document.getElementById('qty-buttons');
+            
+            itemNameEl.textContent = `${totalQty}x ${itemName}`;
+            
+            // Calculate available units (item qty - claims from others)
+            const otherClaims = totalClaims - myClaims;
+            const maxCanClaim = totalQty - otherClaims;
+            
+            // Generate buttons: 0 (none), 1, 2, ... up to maxCanClaim
+            let buttonsHtml = '';
+            for (let i = 0; i <= maxCanClaim; i++) {
+                const isSelected = i === myClaims;
+                const label = i === 0 ? 'Ninguno' : i.toString();
+                buttonsHtml += `
+                    <button onclick="selectQty(${i})" style="
+                        padding: 0.75rem 1.25rem;
+                        border-radius: 10px;
+                        border: 2px solid ${isSelected ? 'var(--accent)' : 'var(--border)'};
+                        background: ${isSelected ? 'var(--accent)' : 'var(--bg-elevated)'};
+                        color: ${isSelected ? 'white' : 'var(--text-primary)'};
+                        font-size: 1rem;
+                        font-weight: 600;
+                        cursor: pointer;
+                        min-width: 50px;
+                    ">${label}</button>
+                `;
+            }
+            
+            buttonsEl.innerHTML = buttonsHtml;
+            modal.style.display = 'flex';
+        }
+        
+        function closeQtyModal() {
+            document.getElementById('qty-modal').style.display = 'none';
+            pendingItemId = null;
+            pendingItemQty = null;
+        }
+        
+        async function selectQty(units) {
+            if (!pendingItemId) return;
+            closeQtyModal();
+            await toggleItem(pendingItemId, units > 0, units);
+        }
+
+        async function toggleItem(itemId, assign, units = 1) {
             try {
                 const response = await fetch(`/api/bill/${billId}/self-assign`, {
                     method: 'POST',
@@ -1013,7 +1102,8 @@
                         bill_id: billId,
                         person_name: currentIdentity,
                         item_id: itemId,
-                        assigned: assign
+                        assigned: assign,
+                        units: units
                     })
                 });
                 
@@ -1057,11 +1147,25 @@
             let subtotal = 0;
             const itemsHtml = myItems.map(item => {
                 const totalPrice = item.price * item.quantity;
-                const numPeople = item.assigned_to.length;
-                const myShare = totalPrice / numPeople;
+                const totalClaims = item.assigned_to.length;
+                const myClaims = item.assigned_to.filter(p => p === currentIdentity).length;
+                
+                // My share = (total price / total claims) * my claims
+                const myShare = (totalPrice / totalClaims) * myClaims;
                 subtotal += myShare;
                 
-                const sharedText = numPeople > 1 ? `÷${numPeople}` : '';
+                // Show claim info: for multi-qty items, show "2/3 units" or "÷3 people"
+                let sharedText = '';
+                if (item.quantity > 1) {
+                    // Multi-quantity: show units claimed
+                    sharedText = `${myClaims}/${item.quantity} uds`;
+                    if (totalClaims > myClaims) {
+                        sharedText += ` (÷${totalClaims})`;
+                    }
+                } else if (totalClaims > 1) {
+                    // Single item shared
+                    sharedText = `÷${totalClaims}`;
+                }
                 
                 return `
                     <div class="breakdown-item">

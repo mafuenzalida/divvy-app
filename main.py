@@ -169,6 +169,7 @@ class SelfAssignRequest(BaseModel):
     person_name: str
     item_id: str
     assigned: bool  # True to assign, False to unassign
+    units: int = 1  # How many units to claim (for multi-quantity items)
 
 
 class SetBillStatusRequest(BaseModel):
@@ -903,12 +904,38 @@ async def self_assign_item(bill_id: str, request: SelfAssignRequest):
     if request.person_name not in bill.people:
         raise HTTPException(status_code=400, detail="Person not in bill")
     
-    # Toggle assignment
+    # For multi-quantity items, we allow claiming specific units
+    # Each claim adds the person's name to assigned_to (can appear multiple times)
+    # This way, split calculation naturally divides by total claims
+    
     if request.assigned:
-        if request.person_name not in item.assigned_to:
-            item.assigned_to.append(request.person_name)
+        # How many units to claim (default 1, max = item.quantity)
+        units_to_claim = min(request.units, item.quantity)
+        
+        # Count how many units this person already has
+        current_claims = item.assigned_to.count(request.person_name)
+        
+        # Count total claims on this item
+        total_claims = len(item.assigned_to)
+        
+        # Calculate available units (quantity - claims from others)
+        other_claims = total_claims - current_claims
+        available_units = item.quantity - other_claims
+        
+        # Adjust units to claim if needed
+        units_to_claim = min(units_to_claim, available_units)
+        
+        if units_to_claim > current_claims:
+            # Add more claims
+            for _ in range(units_to_claim - current_claims):
+                item.assigned_to.append(request.person_name)
+        elif units_to_claim < current_claims:
+            # Remove some claims
+            for _ in range(current_claims - units_to_claim):
+                item.assigned_to.remove(request.person_name)
     else:
-        if request.person_name in item.assigned_to:
+        # Remove ALL claims for this person on this item
+        while request.person_name in item.assigned_to:
             item.assigned_to.remove(request.person_name)
     
     save_bill(bill)
