@@ -995,11 +995,19 @@
                     </div>
                 </div>
 
-                <!-- Split Results -->
+                <!-- Payment Tracking (always visible when there are assignments) -->
+                <div id="payment-tracking" style="display: none; margin-top: 1.5rem;">
+                    <h2 class="card-title" style="margin-bottom: 1rem;">💰 Resumen de Pagos</h2>
+                    <div id="payment-tracking-list">
+                        <!-- Payment tracking cards will be rendered here -->
+                    </div>
+                </div>
+
+                <!-- Split Results (popup for WhatsApp text) -->
                 <div class="split-results" id="split-results">
-                    <h2 class="card-title" style="margin-bottom: 1rem;">💸 Links de Pago</h2>
+                    <h2 class="card-title" style="margin-bottom: 1rem;">📱 Mensaje para WhatsApp</h2>
                     <div id="split-cards">
-                        <!-- Split cards will be rendered here -->
+                        <!-- WhatsApp message will be rendered here -->
                     </div>
                 </div>
             </div>
@@ -1571,10 +1579,8 @@
                 currentBill = await response.json();
                 saveState();
                 
-                // Re-render the split results to update checkboxes
-                const splitsResponse = await fetch(`/api/calculate-splits/${currentBill.id}`);
-                const splits = await splitsResponse.json();
-                renderSplitResults(splits);
+                // Re-render payment tracking (always visible)
+                renderPaymentTracking();
                 
                 showToast(!isPaid ? `${personName} marcado como pagado` : `${personName} marcado como pendiente`, 'success');
             } catch (error) {
@@ -1835,6 +1841,9 @@
             // Update lock UI and status UI
             updateLockUI();
             updateStatusUI();
+            
+            // Always render payment tracking (shows when there are assignments)
+            renderPaymentTracking();
 
             // Disable inputs if locked
             const isLocked = currentBill.locked || false;
@@ -2321,6 +2330,102 @@
             }
         }
 
+        // Render always-visible payment tracking (when there are assignments)
+        async function renderPaymentTracking() {
+            const container = document.getElementById('payment-tracking');
+            const list = document.getElementById('payment-tracking-list');
+            
+            if (!currentBill || !currentBill.people.length) {
+                container.style.display = 'none';
+                return;
+            }
+            
+            // Check if any items have assignments
+            const hasAssignments = currentBill.items.some(item => item.assigned_to && item.assigned_to.length > 0);
+            if (!hasAssignments) {
+                container.style.display = 'none';
+                return;
+            }
+            
+            container.style.display = 'block';
+            
+            // Calculate splits locally (quick calculation)
+            const personTotals = {};
+            currentBill.people.forEach(p => personTotals[p] = 0);
+            
+            currentBill.items.forEach(item => {
+                if (item.assigned_to && item.assigned_to.length > 0) {
+                    const share = (item.price * item.quantity) / item.assigned_to.length;
+                    item.assigned_to.forEach(person => {
+                        if (personTotals[person] !== undefined) {
+                            personTotals[person] += share;
+                        }
+                    });
+                }
+            });
+            
+            // Add proportional tip/tax
+            if (currentBill.subtotal > 0) {
+                currentBill.people.forEach(person => {
+                    const proportion = personTotals[person] / currentBill.subtotal;
+                    personTotals[person] += (currentBill.tip || 0) * proportion + (currentBill.tax || 0) * proportion;
+                });
+            }
+            
+            const paidBy = currentBill.paid_by || [];
+            const fintocUser = currentBill.fintoc_username || '';
+            
+            // Count stats
+            const peopleWithAmount = currentBill.people.filter(p => personTotals[p] > 0);
+            const paidCount = peopleWithAmount.filter(p => paidBy.includes(p)).length;
+            const pendingCount = peopleWithAmount.filter(p => !paidBy.includes(p)).length;
+            const totalPaid = peopleWithAmount.filter(p => paidBy.includes(p)).reduce((sum, p) => sum + personTotals[p], 0);
+            const totalPending = peopleWithAmount.filter(p => !paidBy.includes(p)).reduce((sum, p) => sum + personTotals[p], 0);
+            
+            let html = '';
+            
+            // Summary cards
+            html += `
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem;">
+                    <div style="background: var(--success); color: white; padding: 0.75rem; border-radius: 10px; text-align: center;">
+                        <div style="font-size: 1.25rem; font-weight: 600;">${paidCount}</div>
+                        <div style="font-size: 0.75rem; opacity: 0.9;">Pagado ($${formatNumber(totalPaid)})</div>
+                    </div>
+                    <div style="background: var(--warning); color: white; padding: 0.75rem; border-radius: 10px; text-align: center;">
+                        <div style="font-size: 1.25rem; font-weight: 600;">${pendingCount}</div>
+                        <div style="font-size: 0.75rem; opacity: 0.9;">Pendiente ($${formatNumber(totalPending)})</div>
+                    </div>
+                </div>
+            `;
+            
+            // People list
+            html += '<div style="background: var(--bg-card); border-radius: 12px; border: 1px solid var(--border); overflow: hidden;">';
+            
+            peopleWithAmount.forEach((person, index) => {
+                const amount = personTotals[person];
+                const isPaid = paidBy.includes(person);
+                const link = fintocUser ? `https://fintoc.me/${fintocUser}/${Math.round(amount)}` : '';
+                
+                html += `
+                    <div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; ${index > 0 ? 'border-top: 1px solid var(--border);' : ''} ${isPaid ? 'background: rgba(16, 185, 129, 0.1);' : ''}">
+                        <input type="checkbox" ${isPaid ? 'checked' : ''} onchange="togglePaid('${person}')" style="width: 18px; height: 18px; cursor: pointer; accent-color: var(--success); flex-shrink: 0;">
+                        <div class="split-avatar avatar-${(index % 6) + 1}" style="width: 28px; height: 28px; font-size: 0.75rem; flex-shrink: 0;">${person.charAt(0)}</div>
+                        <div style="flex: 1; min-width: 0;">
+                            <div style="font-weight: 500; font-size: 0.9rem; ${isPaid ? 'text-decoration: line-through; opacity: 0.7;' : ''}">${person}</div>
+                        </div>
+                        <div style="font-family: 'JetBrains Mono', monospace; font-weight: 600; color: ${isPaid ? 'var(--text-muted)' : 'var(--success)'}; ${isPaid ? 'text-decoration: line-through;' : ''}">
+                            $${formatNumber(amount)}
+                        </div>
+                        ${link ? `<a href="${link}" target="_blank" style="color: var(--accent); font-size: 0.8rem; text-decoration: none;">💳</a>` : ''}
+                    </div>
+                `;
+            });
+            
+            html += '</div>';
+            
+            list.innerHTML = html;
+        }
+
         function renderSplitResults(splits) {
             const splitCards = document.getElementById('split-cards');
             const people = Object.keys(splits.person_totals);
@@ -2342,91 +2447,6 @@
                 });
                 return items;
             }
-
-            // Build compact payment links table with paid status
-            const isLocked = currentBill.locked || false;
-            const paidBy = currentBill.paid_by || [];
-            
-            // Count paid/pending
-            const paidCount = people.filter(p => paidBy.includes(p) && splits.person_totals[p] > 0).length;
-            const pendingCount = people.filter(p => !paidBy.includes(p) && splits.person_totals[p] > 0).length;
-            const totalPaid = people.filter(p => paidBy.includes(p)).reduce((sum, p) => sum + (splits.person_totals[p] || 0), 0);
-            const totalPending = people.filter(p => !paidBy.includes(p)).reduce((sum, p) => sum + (splits.person_totals[p] || 0), 0);
-            
-            let cardsHtml = '';
-            
-            // Show payment summary when locked
-            if (isLocked) {
-                cardsHtml += `
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
-                        <div style="background: var(--success); color: white; padding: 1rem; border-radius: 12px; text-align: center;">
-                            <div style="font-size: 1.5rem; font-weight: 600;">${paidCount}</div>
-                            <div style="font-size: 0.85rem; opacity: 0.9;">Pagado ($${formatNumber(totalPaid)})</div>
-                        </div>
-                        <div style="background: var(--warning); color: white; padding: 1rem; border-radius: 12px; text-align: center;">
-                            <div style="font-size: 1.5rem; font-weight: 600;">${pendingCount}</div>
-                            <div style="font-size: 0.85rem; opacity: 0.9;">Pendiente ($${formatNumber(totalPending)})</div>
-                        </div>
-                    </div>
-                `;
-            }
-            
-            cardsHtml += `
-                <div style="background: var(--bg-card); border-radius: 16px; border: 1px solid var(--border); overflow: hidden;">
-                    <table style="width: 100%; border-collapse: collapse;">
-                        <thead>
-                            <tr style="background: var(--bg-elevated);">
-                                ${isLocked ? '<th style="padding: 1rem; text-align: center; font-weight: 500; width: 60px;">Pagó</th>' : ''}
-                                <th style="padding: 1rem; text-align: left; font-weight: 500;">Persona</th>
-                                <th style="padding: 1rem; text-align: right; font-weight: 500;">Monto</th>
-                                <th style="padding: 1rem; text-align: center; font-weight: 500;">Link</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-            `;
-
-            people.forEach((person, index) => {
-                const amount = splits.person_totals[person];
-                const link = splits.payment_links[person];
-                if (amount === 0) return;
-                
-                const isPaid = paidBy.includes(person);
-                const rowStyle = isPaid ? 'background: rgba(var(--success-rgb), 0.1);' : '';
-
-                cardsHtml += `
-                    <tr style="border-top: 1px solid var(--border); ${rowStyle}">
-                        ${isLocked ? `
-                        <td style="padding: 0.75rem 1rem; text-align: center;">
-                            <label class="paid-checkbox" style="cursor: pointer; display: flex; justify-content: center; align-items: center;">
-                                <input type="checkbox" ${isPaid ? 'checked' : ''} onchange="togglePaid('${person}')" style="width: 20px; height: 20px; cursor: pointer; accent-color: var(--success);">
-                            </label>
-                        </td>
-                        ` : ''}
-                        <td style="padding: 0.75rem 1rem;">
-                            <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                <div class="split-avatar avatar-${(index % 6) + 1}" style="width: 28px; height: 28px; font-size: 0.75rem;">${person.charAt(0)}</div>
-                                <span style="${isPaid ? 'text-decoration: line-through; opacity: 0.7;' : ''}">${person}</span>
-                                ${isPaid ? '<span style="background: var(--success); color: white; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.7rem; margin-left: 0.5rem;">✓ Pagado</span>' : ''}
-                            </div>
-                        </td>
-                        <td style="padding: 0.75rem 1rem; text-align: right; font-family: 'JetBrains Mono', monospace; color: ${isPaid ? 'var(--text-muted)' : 'var(--success)'}; font-weight: 500; ${isPaid ? 'text-decoration: line-through;' : ''}">
-                            $${formatNumber(amount)}
-                        </td>
-                        <td style="padding: 0.5rem 1rem; text-align: center;">
-                            <div style="display: flex; gap: 0.5rem; justify-content: center;">
-                                <a href="${link}" target="_blank" class="btn btn-sm ${isPaid ? 'btn-secondary' : 'btn-primary'}" style="padding: 0.4rem 0.75rem; font-size: 0.8rem;">${isPaid ? '✓' : '💳 Pagar'}</a>
-                                <button class="btn btn-sm btn-secondary" onclick="copyLink('${link}')" style="padding: 0.4rem 0.75rem; font-size: 0.8rem;">📋</button>
-                            </div>
-                        </td>
-                    </tr>
-                `;
-            });
-
-            cardsHtml += `
-                        </tbody>
-                    </table>
-                </div>
-            `;
 
             // Build detailed WhatsApp message with item breakdown
             const whatsappLines = people
@@ -2450,12 +2470,9 @@
             
             const whatsappMessage = `🧾 *División de cuenta*\n\n${whatsappLines.join('\n\n───────────\n\n')}\n\n───────────\n💸 *TOTAL CUENTA: $${formatNumber(splits.bill_total)}*`;
             
-            // Add WhatsApp share section
-            cardsHtml += `
-                <div class="whatsapp-share-section" style="margin-top: 1.5rem; padding: 1.5rem; background: var(--bg-card); border-radius: 16px; border: 1px solid var(--border);">
-                    <h3 style="margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
-                        📱 Compartir por WhatsApp
-                    </h3>
+            // Only show WhatsApp share section
+            const cardsHtml = `
+                <div class="whatsapp-share-section" style="padding: 1.5rem; background: var(--bg-card); border-radius: 16px; border: 1px solid var(--border);">
                     <textarea id="whatsapp-text" readonly style="width: 100%; min-height: 250px; padding: 1rem; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 10px; color: var(--text-primary); font-family: inherit; font-size: 0.85rem; resize: vertical; margin-bottom: 1rem; white-space: pre-wrap;">${whatsappMessage}</textarea>
                     <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
                         <button class="btn btn-primary" onclick="copyAllLinks()" style="flex: 1;">
@@ -2465,6 +2482,9 @@
                             💬 Abrir WhatsApp
                         </a>
                     </div>
+                    <button class="btn btn-secondary" style="width: 100%; margin-top: 0.75rem;" onclick="document.getElementById('split-results').classList.remove('active');">
+                        ✕ Cerrar
+                    </button>
                 </div>
             `;
 
@@ -2507,6 +2527,7 @@
             }
             
             document.getElementById('split-results').classList.remove('active');
+            document.getElementById('payment-tracking').style.display = 'none';
             fileInputCompact.value = '';
 
             // Reset title input
