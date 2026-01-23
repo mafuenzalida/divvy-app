@@ -1365,6 +1365,8 @@
                             title: serverBill.title,
                             items: [], // Will be fetched when opened
                             people: [],
+                            items_count: serverBill.items_count, // Store counts for display
+                            people_count: serverBill.people_count,
                             total: serverBill.total,
                             status: serverBill.status,
                             created_at: serverBill.created_at,
@@ -1665,12 +1667,15 @@
                 const dateStr = date.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit' });
                 const isActive = currentBill && currentBill.id === bill.id;
                 const title = (bill.title || 'Boleta').toString();
+                // Use counts from server if arrays are empty (synced bills)
+                const itemsCount = bill.items?.length || bill.items_count || 0;
+                const peopleCount = bill.people?.length || bill.people_count || 0;
                 
                 return `
                     <div class="history-item ${isActive ? 'active' : ''}" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: ${isActive ? 'var(--accent)' : 'var(--bg-card)'}; border-radius: 8px; margin-bottom: 0.5rem; cursor: pointer; border: 1px solid ${isActive ? 'var(--accent)' : 'var(--border)'};" onclick="loadBillFromHistory('${bill.id}')">
                         <div style="flex: 1; min-width: 0;">
                             <div style="font-size: 0.85rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                                ${title} · ${bill.items.length} items · ${bill.people.length} personas
+                                ${title} · ${itemsCount} items · ${peopleCount} personas
                             </div>
                             <div style="font-size: 0.75rem; color: ${isActive ? 'rgba(255,255,255,0.7)' : 'var(--text-muted)'};">
                                 ${dateStr} · $${formatNumber(bill.total)}
