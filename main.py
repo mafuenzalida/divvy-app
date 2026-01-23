@@ -622,8 +622,10 @@ async def get_bill(bill_id: str, fresh: bool = False):
             bill = Bill(**bill_data)
             bills_storage[bill_id] = bill  # Update memory cache
             return bill
-        raise HTTPException(status_code=404, detail="Bill not found")
+        # Fallback to memory cache if DB fetch failed
+        print(f"⚠️ Fresh fetch failed for {bill_id}, trying memory cache")
     
+    # Try memory/DB via fetch_bill
     bill = fetch_bill(bill_id)
     if not bill:
         raise HTTPException(status_code=404, detail="Bill not found")

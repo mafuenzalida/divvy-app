@@ -86,12 +86,18 @@ def get_bill(bill_id: str) -> dict:
         client = _get_turso_client()
         if client:
             try:
+                print(f"🔍 Fetching bill {bill_id} from Turso...")
                 cursor = client.execute("SELECT data FROM bills WHERE id = ?", [bill_id])
                 rows = cursor.fetchall()
                 if rows:
+                    print(f"✅ Found bill {bill_id} in Turso")
                     return json.loads(rows[0][0])
+                else:
+                    print(f"❌ Bill {bill_id} not found in Turso")
             except Exception as e:
-                print(f"Error getting bill from Turso: {e}")
+                print(f"⚠️ Error getting bill from Turso: {e}")
+        else:
+            print(f"⚠️ No Turso client available for get_bill")
     
     # Fallback to JSON file
     try:
