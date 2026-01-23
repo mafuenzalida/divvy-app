@@ -469,6 +469,36 @@ async def get_status():
     }
 
 
+@app.get("/api/bills")
+async def list_all_bills():
+    """List all bills from database (for syncing with editor)."""
+    # First, refresh from database to get any bills not in memory
+    all_bills_data = database.load_all_bills()
+    
+    # Update memory cache with any missing bills
+    for bill_id, bill_data in all_bills_data.items():
+        if bill_id not in bills_storage:
+            bills_storage[bill_id] = Bill(**bill_data)
+    
+    # Return summary of all bills (not full data to keep response small)
+    bills_list = []
+    for bill_id, bill in bills_storage.items():
+        bills_list.append({
+            "id": bill.id,
+            "title": bill.title,
+            "items_count": len(bill.items),
+            "people_count": len(bill.people),
+            "total": bill.total,
+            "status": bill.status,
+            "created_at": bill.created_at
+        })
+    
+    # Sort by created_at descending (newest first)
+    bills_list.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+    
+    return {"bills": bills_list}
+
+
 @app.post("/api/auth")
 async def authenticate(request: AuthRequest):
     """Authenticate with app password."""

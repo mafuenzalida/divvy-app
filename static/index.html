@@ -1346,6 +1346,46 @@
             }
         }
 
+        // Sync bills from server (fetches from database)
+        async function syncBillsFromServer() {
+            try {
+                const response = await fetch('/api/bills');
+                if (!response.ok) return;
+                
+                const data = await response.json();
+                const serverBills = data.bills || [];
+                
+                // Merge server bills with local bills
+                serverBills.forEach(serverBill => {
+                    const existingIndex = allBills.findIndex(b => b.id === serverBill.id);
+                    if (existingIndex === -1) {
+                        // Bill not in local storage - add it (we'll fetch full data when opened)
+                        allBills.push({
+                            id: serverBill.id,
+                            title: serverBill.title,
+                            items: [], // Will be fetched when opened
+                            people: [],
+                            total: serverBill.total,
+                            status: serverBill.status,
+                            created_at: serverBill.created_at,
+                            _fromServer: true // Flag to indicate we need to fetch full data
+                        });
+                    }
+                });
+                
+                // Sort by created_at
+                allBills.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+                
+                // Save merged list
+                localStorage.setItem(BILLS_STORAGE_KEY, JSON.stringify(allBills));
+                renderBillsHistory();
+                
+                console.log(`Synced ${serverBills.length} bills from server`);
+            } catch (e) {
+                console.log('Could not sync bills from server:', e);
+            }
+        }
+
         // Load current state from localStorage
         function loadState() {
             try {
@@ -1393,22 +1433,42 @@
             loadAllBills();
             const bill = allBills.find(b => b.id === billId);
             if (bill) {
-                currentBill = bill;
-                // Restore on backend and get recalculated bill
-                try {
-                    const response = await fetch('/api/restore-bill', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(currentBill)
-                    });
-                    const result = await response.json();
-                    if (result.bill) {
-                        currentBill = result.bill;
+                // If bill was synced from server (incomplete data), fetch full bill
+                if (bill._fromServer || bill.items.length === 0) {
+                    try {
+                        const response = await fetch(`/api/bill/${billId}?fresh=true`);
+                        if (response.ok) {
+                            currentBill = await response.json();
+                            // Update local storage with full data
+                            const idx = allBills.findIndex(b => b.id === billId);
+                            if (idx >= 0) {
+                                allBills[idx] = { ...currentBill };
+                                delete allBills[idx]._fromServer;
+                                localStorage.setItem(BILLS_STORAGE_KEY, JSON.stringify(allBills));
+                            }
+                        }
+                    } catch (e) {
+                        console.error('Error fetching bill from server:', e);
+                        currentBill = bill;
                     }
-                } catch (e) {
-                    console.error('Error restoring on backend:', e);
-                    // Recalculate locally if backend fails
-                    recalculateTotals();
+                } else {
+                    currentBill = bill;
+                    // Restore on backend and get recalculated bill
+                    try {
+                        const response = await fetch('/api/restore-bill', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(currentBill)
+                        });
+                        const result = await response.json();
+                        if (result.bill) {
+                            currentBill = result.bill;
+                        }
+                    } catch (e) {
+                        console.error('Error restoring on backend:', e);
+                        // Recalculate locally if backend fails
+                        recalculateTotals();
+                    }
                 }
                 saveState();
                 renderBill();
@@ -2587,6 +2647,9 @@
         async function initializeApp() {
             // Always load and render bills history
             loadAllBills();
+            
+            // Sync bills from server (async, updates UI when done)
+            syncBillsFromServer();
             
             if (loadState()) {
                 // Also restore on backend so API calls work
