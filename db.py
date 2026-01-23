@@ -29,9 +29,9 @@ def _get_turso_client():
     global _turso_client
     if _turso_client is None and USE_TURSO:
         try:
-            from libsql_client import create_client_sync
-            _turso_client = create_client_sync(
-                url=TURSO_DATABASE_URL,
+            import libsql_experimental as libsql
+            _turso_client = libsql.connect(
+                TURSO_DATABASE_URL,
                 auth_token=TURSO_AUTH_TOKEN
             )
             # Ensure table exists
@@ -41,6 +41,7 @@ def _get_turso_client():
                     data TEXT NOT NULL
                 )
             """)
+            _turso_client.commit()
             print("✅ Connected to Turso database")
         except Exception as e:
             print(f"⚠️ Turso connection failed: {e}")
@@ -54,9 +55,10 @@ def load_all_bills() -> dict:
         client = _get_turso_client()
         if client:
             try:
-                result = client.execute("SELECT id, data FROM bills")
+                cursor = client.execute("SELECT id, data FROM bills")
+                rows = cursor.fetchall()
                 bills = {}
-                for row in result.rows:
+                for row in rows:
                     bill_id = row[0]
                     bill_data = json.loads(row[1])
                     bills[bill_id] = bill_data
@@ -84,9 +86,10 @@ def get_bill(bill_id: str) -> dict:
         client = _get_turso_client()
         if client:
             try:
-                result = client.execute("SELECT data FROM bills WHERE id = ?", [bill_id])
-                if result.rows:
-                    return json.loads(result.rows[0][0])
+                cursor = client.execute("SELECT data FROM bills WHERE id = ?", [bill_id])
+                rows = cursor.fetchall()
+                if rows:
+                    return json.loads(rows[0][0])
             except Exception as e:
                 print(f"Error getting bill from Turso: {e}")
     
@@ -113,6 +116,7 @@ def save_bill(bill_id: str, bill_data: dict):
                     "INSERT OR REPLACE INTO bills (id, data) VALUES (?, ?)",
                     [bill_id, data_json]
                 )
+                client.commit()
                 return
             except Exception as e:
                 print(f"Error saving to Turso: {e}")
@@ -128,6 +132,7 @@ def delete_bill(bill_id: str):
         if client:
             try:
                 client.execute("DELETE FROM bills WHERE id = ?", [bill_id])
+                client.commit()
                 return
             except Exception as e:
                 print(f"Error deleting from Turso: {e}")
