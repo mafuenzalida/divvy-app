@@ -107,6 +107,23 @@ def save_bill(bill):
     print(f"💾 Saved bill {bill.id}: {len(bill.people)} people, {len(bill.items)} items")
 
 
+def get_bill(bill_id: str) -> Optional[Bill]:
+    """Get a bill - try memory first, then fetch from DB if not found."""
+    # Try memory cache first
+    if bill_id in bills_storage:
+        return bills_storage[bill_id]
+    
+    # Not in memory - try fetching from database
+    bill_data = database.get_bill(bill_id)
+    if bill_data:
+        bill = Bill(**bill_data)
+        bills_storage[bill_id] = bill  # Cache it
+        print(f"📥 Loaded bill {bill_id} from database (was not in memory)")
+        return bill
+    
+    return None
+
+
 # Load bills on startup
 load_bills_from_storage()
 
@@ -577,9 +594,10 @@ async def get_bill(bill_id: str, fresh: bool = False):
             return bill
         raise HTTPException(status_code=404, detail="Bill not found")
     
-    if bill_id not in bills_storage:
+    bill = get_bill(bill_id)
+    if not bill:
         raise HTTPException(status_code=404, detail="Bill not found")
-    return bills_storage[bill_id]
+    return bill
 
 
 def recalculate_bill_totals(bill: Bill) -> Bill:
@@ -617,10 +635,9 @@ async def restore_bill(bill: Bill):
 @app.post("/api/update-title")
 async def update_bill_title(request: UpdateBillTitleRequest):
     """Update bill title."""
-    if request.bill_id not in bills_storage:
+    bill = get_bill(request.bill_id)
+    if not bill:
         raise HTTPException(status_code=404, detail="Bill not found")
-
-    bill = bills_storage[request.bill_id]
 
     title = request.title.strip()
     if not title:
@@ -635,10 +652,9 @@ async def update_bill_title(request: UpdateBillTitleRequest):
 @app.post("/api/update-fintoc-username")
 async def update_fintoc_username(request: UpdateFintocUsernameRequest):
     """Update Fintoc username for payment links."""
-    if request.bill_id not in bills_storage:
+    bill = get_bill(request.bill_id)
+    if not bill:
         raise HTTPException(status_code=404, detail="Bill not found")
-
-    bill = bills_storage[request.bill_id]
     
     # Clean the username (remove @ if present, trim whitespace)
     username = request.fintoc_username.strip().lstrip('@')
@@ -651,10 +667,9 @@ async def update_fintoc_username(request: UpdateFintocUsernameRequest):
 @app.post("/api/add-person")
 async def add_person(request: AddPersonRequest):
     """Add a person to a bill."""
-    if request.bill_id not in bills_storage:
+    bill = get_bill(request.bill_id)
+    if not bill:
         raise HTTPException(status_code=404, detail="Bill not found")
-    
-    bill = bills_storage[request.bill_id]
     if bill.locked:
         raise HTTPException(status_code=403, detail="Bill is locked")
     
@@ -668,10 +683,9 @@ async def add_person(request: AddPersonRequest):
 @app.post("/api/remove-person")
 async def remove_person(request: AddPersonRequest):
     """Remove a person from a bill."""
-    if request.bill_id not in bills_storage:
+    bill = get_bill(request.bill_id)
+    if not bill:
         raise HTTPException(status_code=404, detail="Bill not found")
-    
-    bill = bills_storage[request.bill_id]
     if bill.locked:
         raise HTTPException(status_code=403, detail="Bill is locked")
     
@@ -692,10 +706,9 @@ async def remove_person(request: AddPersonRequest):
 @app.post("/api/assign-item")
 async def assign_item(request: AssignItemRequest):
     """Assign or unassign a person to a bill item."""
-    if request.bill_id not in bills_storage:
+    bill = get_bill(request.bill_id)
+    if not bill:
         raise HTTPException(status_code=404, detail="Bill not found")
-    
-    bill = bills_storage[request.bill_id]
     if bill.locked:
         raise HTTPException(status_code=403, detail="Bill is locked")
     
@@ -717,10 +730,9 @@ async def assign_item(request: AssignItemRequest):
 @app.post("/api/update-tip-tax")
 async def update_tip_tax(request: UpdateTipTaxRequest):
     """Update tip (as percentage) and tax for a bill."""
-    if request.bill_id not in bills_storage:
+    bill = get_bill(request.bill_id)
+    if not bill:
         raise HTTPException(status_code=404, detail="Bill not found")
-    
-    bill = bills_storage[request.bill_id]
     if bill.locked:
         raise HTTPException(status_code=403, detail="Bill is locked")
     
@@ -741,10 +753,9 @@ async def update_tip_tax(request: UpdateTipTaxRequest):
 @app.post("/api/add-item")
 async def add_item(request: AddItemRequest):
     """Manually add an item to a bill."""
-    if request.bill_id not in bills_storage:
+    bill = get_bill(request.bill_id)
+    if not bill:
         raise HTTPException(status_code=404, detail="Bill not found")
-    
-    bill = bills_storage[request.bill_id]
     if bill.locked:
         raise HTTPException(status_code=403, detail="Bill is locked")
     
@@ -770,10 +781,9 @@ async def add_item(request: AddItemRequest):
 @app.delete("/api/item/{bill_id}/{item_id}")
 async def delete_item(bill_id: str, item_id: str):
     """Delete an item from a bill."""
-    if bill_id not in bills_storage:
+    bill = get_bill(bill_id)
+    if not bill:
         raise HTTPException(status_code=404, detail="Bill not found")
-    
-    bill = bills_storage[bill_id]
     if bill.locked:
         raise HTTPException(status_code=403, detail="Bill is locked")
     
@@ -794,10 +804,9 @@ async def delete_item(bill_id: str, item_id: str):
 @app.post("/api/lock-bill")
 async def lock_bill(request: LockBillRequest):
     """Lock or unlock a bill."""
-    if request.bill_id not in bills_storage:
+    bill = get_bill(request.bill_id)
+    if not bill:
         raise HTTPException(status_code=404, detail="Bill not found")
-    
-    bill = bills_storage[request.bill_id]
     bill.locked = request.locked
     
     save_bill(bill)
@@ -807,10 +816,9 @@ async def lock_bill(request: LockBillRequest):
 @app.post("/api/mark-paid")
 async def mark_paid(request: MarkPaidRequest):
     """Mark a person as paid or unpaid."""
-    if request.bill_id not in bills_storage:
+    bill = get_bill(request.bill_id)
+    if not bill:
         raise HTTPException(status_code=404, detail="Bill not found")
-    
-    bill = bills_storage[request.bill_id]
     
     if request.paid:
         if request.person_name not in bill.paid_by:
@@ -828,10 +836,9 @@ async def mark_paid(request: MarkPaidRequest):
 @app.get("/api/bill/{bill_id}/participant")
 async def get_bill_for_participant(bill_id: str):
     """Get bill data for participant view (read-only overview)."""
-    if bill_id not in bills_storage:
+    bill = get_bill(bill_id)
+    if not bill:
         raise HTTPException(status_code=404, detail="Bill not found")
-    
-    bill = bills_storage[bill_id]
     
     # Calculate splits for each person
     person_totals = {person: 0.0 for person in bill.people}
@@ -867,10 +874,9 @@ async def get_bill_for_participant(bill_id: str):
 @app.post("/api/bill/{bill_id}/join")
 async def join_bill(bill_id: str, request: JoinBillRequest):
     """Join a bill as a new participant."""
-    if bill_id not in bills_storage:
+    bill = get_bill(bill_id)
+    if not bill:
         raise HTTPException(status_code=404, detail="Bill not found")
-    
-    bill = bills_storage[bill_id]
     
     # Don't allow joining locked or closed bills
     if bill.locked:
@@ -894,10 +900,9 @@ async def join_bill(bill_id: str, request: JoinBillRequest):
 @app.post("/api/bill/{bill_id}/self-assign")
 async def self_assign_item(bill_id: str, request: SelfAssignRequest):
     """Participant assigns themselves to an item."""
-    if bill_id not in bills_storage:
+    bill = get_bill(bill_id)
+    if not bill:
         raise HTTPException(status_code=404, detail="Bill not found")
-    
-    bill = bills_storage[bill_id]
     
     # Don't allow changes on locked or closed bills
     if bill.locked:
@@ -956,13 +961,12 @@ async def self_assign_item(bill_id: str, request: SelfAssignRequest):
 @app.post("/api/bill/{bill_id}/status")
 async def set_bill_status(bill_id: str, request: SetBillStatusRequest):
     """Set bill status (draft, ready, closed)."""
-    if bill_id not in bills_storage:
-        raise HTTPException(status_code=404, detail="Bill not found")
-    
     if request.status not in ["draft", "ready", "closed"]:
         raise HTTPException(status_code=400, detail="Invalid status")
     
-    bill = bills_storage[bill_id]
+    bill = get_bill(bill_id)
+    if not bill:
+        raise HTTPException(status_code=404, detail="Bill not found")
     bill.status = request.status
     
     # Sync locked state with status
@@ -980,10 +984,9 @@ async def set_bill_status(bill_id: str, request: SetBillStatusRequest):
 @app.get("/api/calculate-splits/{bill_id}")
 async def calculate_splits(bill_id: str):
     """Calculate how much each person owes."""
-    if bill_id not in bills_storage:
+    bill = get_bill(bill_id)
+    if not bill:
         raise HTTPException(status_code=404, detail="Bill not found")
-    
-    bill = bills_storage[bill_id]
     
     # Calculate per-person totals
     person_totals = {person: 0.0 for person in bill.people}
