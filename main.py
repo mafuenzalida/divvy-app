@@ -551,33 +551,43 @@ async def get_status():
 
 @app.get("/api/bills")
 async def list_all_bills():
-    """List all bills from database (for syncing with editor)."""
-    # First, refresh from database to get any bills not in memory
+    """List all bills from database (for syncing with editor).
+    Always fetches fresh from database to ensure all bills are returned."""
+    # CRITICAL: Always fetch fresh from database, don't rely on cache
     all_bills_data = database.load_all_bills()
 
-    # Update memory cache with any missing bills
+    # Update memory cache with all bills from database
     for bill_id, bill_data in all_bills_data.items():
-        if bill_id not in bills_storage:
+        try:
             bills_storage[bill_id] = Bill(**bill_data)
+        except Exception as e:
+            print(f"⚠️ Error parsing bill {bill_id}: {e}")
+            continue
 
-    # Return summary of all bills (not full data to keep response small)
+    # Return summary of all bills directly from database data (not cache)
     bills_list = []
-    for bill_id, bill in bills_storage.items():
-        bills_list.append(
-            {
-                "id": bill.id,
-                "title": bill.title,
-                "items_count": len(bill.items),
-                "people_count": len(bill.people),
-                "total": bill.total,
-                "status": bill.status,
-                "created_at": bill.created_at,
-            }
-        )
+    for bill_id, bill_data in all_bills_data.items():
+        try:
+            bill = Bill(**bill_data)
+            bills_list.append(
+                {
+                    "id": bill.id,
+                    "title": bill.title,
+                    "items_count": len(bill.items),
+                    "people_count": len(bill.people),
+                    "total": bill.total,
+                    "status": bill.status,
+                    "created_at": bill.created_at,
+                }
+            )
+        except Exception as e:
+            print(f"⚠️ Error processing bill {bill_id} for list: {e}")
+            continue
 
     # Sort by created_at descending (newest first)
     bills_list.sort(key=lambda x: x.get("created_at", ""), reverse=True)
 
+    print(f"📋 Returning {len(bills_list)} bills from database")
     return {"bills": bills_list}
 
 
@@ -699,9 +709,11 @@ async def scan_bill(file: UploadFile = File(...)):
 
 
 @app.get("/api/bill/{bill_id}")
-async def get_bill(bill_id: str, fresh: bool = False):
-    """Get a bill by ID. Use ?fresh=true to fetch directly from database."""
-    # Use force_refresh parameter to bypass cache
+async def get_bill(bill_id: str, fresh: bool = True):
+    """Get a bill by ID. Always fetches fresh from database by default to ensure data consistency.
+    Use ?fresh=false to use cache (not recommended in production)."""
+    # Default to fresh=true to always get latest from database
+    # This ensures consistency across instances
     bill = fetch_bill(bill_id, force_refresh=fresh)
     if not bill:
         raise HTTPException(status_code=404, detail="Bill not found")

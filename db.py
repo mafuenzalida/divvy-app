@@ -30,6 +30,9 @@ def _get_turso_client():
     if _turso_client is None and USE_TURSO:
         try:
             import libsql_experimental as libsql
+            if not TURSO_DATABASE_URL or not TURSO_AUTH_TOKEN:
+                print("⚠️ Turso credentials not configured")
+                return None
             _turso_client = libsql.connect(
                 TURSO_DATABASE_URL,
                 auth_token=TURSO_AUTH_TOKEN
@@ -43,14 +46,19 @@ def _get_turso_client():
             """)
             _turso_client.commit()
             print("✅ Connected to Turso database")
+        except ImportError:
+            print("⚠️ libsql_experimental not installed. Install with: pip install libsql-experimental")
+            return None
         except Exception as e:
             print(f"⚠️ Turso connection failed: {e}")
+            import traceback
+            traceback.print_exc()
             return None
     return _turso_client
 
 
 def load_all_bills() -> dict:
-    """Load all bills from storage."""
+    """Load all bills from storage. Returns empty dict on error."""
     if USE_TURSO:
         client = _get_turso_client()
         if client:
@@ -59,29 +67,42 @@ def load_all_bills() -> dict:
                 rows = cursor.fetchall()
                 bills = {}
                 for row in rows:
-                    bill_id = row[0]
-                    bill_data = json.loads(row[1])
-                    bills[bill_id] = bill_data
-                print(f"Loaded {len(bills)} bills from Turso")
+                    try:
+                        bill_id = row[0]
+                        bill_data = json.loads(row[1])
+                        bills[bill_id] = bill_data
+                    except (json.JSONDecodeError, IndexError) as e:
+                        print(f"⚠️ Error parsing bill row: {e}")
+                        continue
+                print(f"✅ Loaded {len(bills)} bills from Turso")
                 return bills
             except Exception as e:
-                print(f"Error loading from Turso: {e}")
+                print(f"❌ Error loading from Turso: {e}")
+                import traceback
+                traceback.print_exc()
+        else:
+            print("⚠️ Turso client not available, falling back to local file")
     
     # Fallback to JSON file
     try:
         if os.path.exists(BILLS_FILE):
             with open(BILLS_FILE, 'r') as f:
                 bills = json.load(f)
-                print(f"Loaded {len(bills)} bills from {BILLS_FILE}")
+                print(f"✅ Loaded {len(bills)} bills from {BILLS_FILE}")
                 return bills
+        else:
+            print(f"ℹ️ No local file found at {BILLS_FILE}")
     except Exception as e:
-        print(f"Error loading bills from file: {e}")
+        print(f"❌ Error loading bills from file: {e}")
+        import traceback
+        traceback.print_exc()
     
+    print("⚠️ No bills loaded, returning empty dict")
     return {}
 
 
 def get_bill(bill_id: str) -> dict:
-    """Get a single bill from storage (fresh from DB)."""
+    """Get a single bill from storage (fresh from DB). Returns None if not found."""
     if USE_TURSO:
         client = _get_turso_client()
         if client:
@@ -89,13 +110,20 @@ def get_bill(bill_id: str) -> dict:
                 print(f"🔍 Fetching bill {bill_id} from Turso...")
                 cursor = client.execute("SELECT data FROM bills WHERE id = ?", [bill_id])
                 rows = cursor.fetchall()
-                if rows:
-                    print(f"✅ Found bill {bill_id} in Turso")
-                    return json.loads(rows[0][0])
+                if rows and len(rows) > 0:
+                    try:
+                        bill_data = json.loads(rows[0][0])
+                        print(f"✅ Found bill {bill_id} in Turso")
+                        return bill_data
+                    except json.JSONDecodeError as e:
+                        print(f"❌ Error parsing bill {bill_id} data: {e}")
+                        return None
                 else:
                     print(f"❌ Bill {bill_id} not found in Turso")
             except Exception as e:
                 print(f"⚠️ Error getting bill from Turso: {e}")
+                import traceback
+                traceback.print_exc()
         else:
             print(f"⚠️ No Turso client available for get_bill")
     
@@ -104,9 +132,14 @@ def get_bill(bill_id: str) -> dict:
         if os.path.exists(BILLS_FILE):
             with open(BILLS_FILE, 'r') as f:
                 bills = json.load(f)
-                return bills.get(bill_id)
+                bill = bills.get(bill_id)
+                if bill:
+                    print(f"✅ Found bill {bill_id} in local file")
+                return bill
     except Exception as e:
-        print(f"Error getting bill from file: {e}")
+        print(f"❌ Error getting bill from file: {e}")
+        import traceback
+        traceback.print_exc()
     
     return None
 
