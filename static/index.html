@@ -1470,6 +1470,14 @@
                                 delete allBills[idx]._fromServer;
                                 localStorage.setItem(BILLS_STORAGE_KEY, JSON.stringify(allBills));
                             }
+                        } else if (response.status === 404) {
+                            // Bill doesn't exist on server - remove from localStorage
+                            console.log(`Bill ${billId} not found on server, removing from localStorage`);
+                            allBills = allBills.filter(b => b.id !== billId);
+                            localStorage.setItem(BILLS_STORAGE_KEY, JSON.stringify(allBills));
+                            renderBillsHistory();
+                            showToast('Esta boleta ya no existe', 'error');
+                            return;
                         }
                     } catch (e) {
                         console.error('Error fetching bill from server:', e);
