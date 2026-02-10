@@ -111,24 +111,51 @@ def get_bill(bill_id: str) -> dict:
     return None
 
 
-def save_bill(bill_id: str, bill_data: dict):
-    """Save a single bill to storage."""
-    if USE_TURSO:
-        client = _get_turso_client()
-        if client:
-            try:
+def save_bill(bill_id: str, bill_data: dict, retries: int = 3):
+    """Save a single bill to storage. Raises exception on failure to ensure data integrity.
+    
+    Args:
+        bill_id: The bill ID to save
+        bill_data: The bill data as a dict
+        retries: Number of retry attempts for transient failures
+        
+    Raises:
+        Exception: If save fails after all retries
+    """
+    last_error = None
+    
+    for attempt in range(retries):
+        try:
+            if USE_TURSO:
+                client = _get_turso_client()
+                if not client:
+                    raise Exception("Turso client not available")
+                
                 data_json = json.dumps(bill_data)
                 client.execute(
                     "INSERT OR REPLACE INTO bills (id, data) VALUES (?, ?)",
                     [bill_id, data_json]
                 )
                 client.commit()
-                return
-            except Exception as e:
-                print(f"Error saving to Turso: {e}")
+                print(f"✅ Successfully saved bill {bill_id} to Turso (attempt {attempt + 1})")
+                return  # Success!
+            
+            # Fallback to JSON file
+            _save_to_file(bill_id, bill_data)
+            print(f"✅ Successfully saved bill {bill_id} to local file")
+            return  # Success!
+            
+        except Exception as e:
+            last_error = e
+            if attempt < retries - 1:
+                print(f"⚠️ Error saving bill {bill_id} (attempt {attempt + 1}/{retries}): {e}. Retrying...")
+                import time
+                time.sleep(0.1 * (attempt + 1))  # Exponential backoff
+            else:
+                print(f"❌ CRITICAL: Failed to save bill {bill_id} after {retries} attempts: {e}")
     
-    # Fallback to JSON file
-    _save_to_file(bill_id, bill_data)
+    # If we get here, all retries failed
+    raise Exception(f"Failed to save bill {bill_id} to database after {retries} attempts: {last_error}")
 
 
 def delete_bill(bill_id: str):
