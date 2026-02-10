@@ -1355,7 +1355,18 @@
                 const data = await response.json();
                 const serverBills = data.bills || [];
                 
-                // Merge server bills with local bills
+                // Create a set of server bill IDs for quick lookup
+                const serverBillIds = new Set(serverBills.map(b => b.id));
+                
+                // Remove bills from localStorage that don't exist on server anymore
+                const billsToKeep = allBills.filter(bill => serverBillIds.has(bill.id));
+                const removedCount = allBills.length - billsToKeep.length;
+                if (removedCount > 0) {
+                    console.log(`Removed ${removedCount} stale bills from localStorage`);
+                }
+                allBills = billsToKeep;
+                
+                // Merge server bills with local bills (add new ones, update existing ones)
                 serverBills.forEach(serverBill => {
                     const existingIndex = allBills.findIndex(b => b.id === serverBill.id);
                     if (existingIndex === -1) {
@@ -1372,6 +1383,17 @@
                             created_at: serverBill.created_at,
                             _fromServer: true // Flag to indicate we need to fetch full data
                         });
+                    } else {
+                        // Update existing bill with server data (in case counts changed)
+                        allBills[existingIndex] = {
+                            ...allBills[existingIndex],
+                            title: serverBill.title,
+                            items_count: serverBill.items_count,
+                            people_count: serverBill.people_count,
+                            total: serverBill.total,
+                            status: serverBill.status,
+                            created_at: serverBill.created_at,
+                        };
                     }
                 });
                 
