@@ -113,11 +113,11 @@ def load_bills_from_storage():
 
 
 def save_bill(bill, force_refresh_first: bool = False):
-    """Save a single bill to storage. 
-    
+    """Save a single bill to storage.
+
     CRITICAL: Saves to database FIRST, then updates cache only on success.
     This ensures data integrity - if DB save fails, cache is not updated.
-    
+
     Args:
         bill: The Bill object to save
         force_refresh_first: If True, fetch latest from DB before saving (prevents overwriting concurrent changes)
@@ -131,7 +131,7 @@ def save_bill(bill, force_refresh_first: bool = False):
             # For now, we'll save the current bill as-is
             # The caller should handle merging if needed
             pass
-    
+
     # CRITICAL: Save to database FIRST
     try:
         database.save_bill(bill.id, bill.model_dump())
@@ -140,7 +140,7 @@ def save_bill(bill, force_refresh_first: bool = False):
         error_msg = f"❌ CRITICAL: Failed to save bill {bill.id} to database: {e}"
         print(error_msg)
         raise HTTPException(status_code=500, detail=error_msg) from e
-    
+
     # Only update cache AFTER successful DB save
     bills_storage[bill.id] = bill
     print(
@@ -729,7 +729,7 @@ async def restore_bill(bill: Bill):
     Fetches fresh data from DB first to merge with client changes and prevent data loss."""
     # CRITICAL: Fetch latest from DB first to prevent overwriting concurrent changes
     existing_bill = fetch_bill(bill.id, force_refresh=True)
-    
+
     # If bill exists in DB, merge important fields to preserve concurrent updates
     if existing_bill:
         # Preserve people and assignments from DB (they might have been updated by participants)
@@ -741,7 +741,7 @@ async def restore_bill(bill: Bill):
             if client_item and db_item.assigned_to:
                 # Preserve DB assignments if they exist
                 client_item.assigned_to = db_item.assigned_to
-    
+
     # Recalculate totals to ensure consistency
     bill = recalculate_bill_totals(bill)
     # Ensure new fields have defaults
@@ -960,8 +960,11 @@ async def mark_paid(request: MarkPaidRequest):
 
 @app.get("/api/bill/{bill_id}/participant")
 async def get_bill_for_participant(bill_id: str):
-    """Get bill data for participant view (read-only overview)."""
-    bill = fetch_bill(bill_id)
+    """Get bill data for participant view (read-only overview).
+    Always fetches fresh from database to ensure it works across all instances."""
+    # CRITICAL: Always fetch fresh from DB for participant view
+    # This ensures it works even if the bill isn't in this instance's cache
+    bill = fetch_bill(bill_id, force_refresh=True)
     if not bill:
         raise HTTPException(status_code=404, detail="Bill not found")
 
@@ -1003,23 +1006,23 @@ async def join_bill(bill_id: str, request: JoinBillRequest):
     bill = fetch_bill(bill_id, force_refresh=True)
     if not bill:
         raise HTTPException(status_code=404, detail="Bill not found")
-    
+
     # Don't allow joining locked or closed bills
     if bill.locked:
         raise HTTPException(status_code=403, detail="La cuenta está bloqueada")
     if bill.status == "closed":
         raise HTTPException(status_code=403, detail="La cuenta está cerrada")
-    
+
     person_name = request.person_name.strip()
     if not person_name:
         raise HTTPException(status_code=400, detail="Name cannot be empty")
-    
+
     if person_name in bill.people:
         raise HTTPException(status_code=400, detail="Name already exists")
-    
+
     bill.people.append(person_name)
     save_bill(bill)
-    
+
     return {"status": "joined", "person_name": person_name, "bill": bill}
 
 
@@ -1030,43 +1033,43 @@ async def self_assign_item(bill_id: str, request: SelfAssignRequest):
     bill = fetch_bill(bill_id, force_refresh=True)
     if not bill:
         raise HTTPException(status_code=404, detail="Bill not found")
-    
+
     # Don't allow changes on locked or closed bills
     if bill.locked:
         raise HTTPException(status_code=403, detail="La cuenta está bloqueada")
     if bill.status == "closed":
         raise HTTPException(status_code=403, detail="La cuenta está cerrada")
-    
+
     # Find the item
     item = next((i for i in bill.items if i.id == request.item_id), None)
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
-    
+
     # Verify person exists in bill
     if request.person_name not in bill.people:
         raise HTTPException(status_code=400, detail="Person not in bill")
-    
+
     # For multi-quantity items, we allow claiming specific units
     # Each claim adds the person's name to assigned_to (can appear multiple times)
     # This way, split calculation naturally divides by total claims
-    
+
     if request.assigned:
         # How many units to claim (default 1, max = item.quantity)
         units_to_claim = min(request.units, item.quantity)
-        
+
         # Count how many units this person already has
         current_claims = item.assigned_to.count(request.person_name)
-        
+
         # Count total claims on this item
         total_claims = len(item.assigned_to)
-        
+
         # Calculate available units (quantity - claims from others)
         other_claims = total_claims - current_claims
         available_units = item.quantity - other_claims
-        
+
         # Adjust units to claim if needed
         units_to_claim = min(units_to_claim, available_units)
-        
+
         if units_to_claim > current_claims:
             # Add more claims
             for _ in range(units_to_claim - current_claims):
@@ -1079,10 +1082,10 @@ async def self_assign_item(bill_id: str, request: SelfAssignRequest):
         # Remove ALL claims for this person on this item
         while request.person_name in item.assigned_to:
             item.assigned_to.remove(request.person_name)
-    
+
     # Save with force_refresh to ensure we have latest data
     save_bill(bill)
-    
+
     return {"status": "updated", "bill": bill}
 
 
