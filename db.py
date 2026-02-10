@@ -108,7 +108,7 @@ def get_bill(bill_id: str) -> dict:
         if client:
             try:
                 print(f"🔍 Fetching bill {bill_id} from Turso...")
-                cursor = client.execute("SELECT data FROM bills WHERE id = ?", [bill_id])
+                cursor = client.execute("SELECT data FROM bills WHERE id = ?", (bill_id,))
                 rows = cursor.fetchall()
                 if rows and len(rows) > 0:
                     try:
@@ -167,7 +167,7 @@ def save_bill(bill_id: str, bill_data: dict, retries: int = 3):
                 data_json = json.dumps(bill_data)
                 client.execute(
                     "INSERT OR REPLACE INTO bills (id, data) VALUES (?, ?)",
-                    [bill_id, data_json]
+                    (bill_id, data_json)
                 )
                 client.commit()
                 print(f"✅ Successfully saved bill {bill_id} to Turso (attempt {attempt + 1})")
@@ -197,7 +197,7 @@ def delete_bill(bill_id: str):
         client = _get_turso_client()
         if client:
             try:
-                client.execute("DELETE FROM bills WHERE id = ?", [bill_id])
+                client.execute("DELETE FROM bills WHERE id = ?", (bill_id,))
                 client.commit()
                 return
             except Exception as e:
