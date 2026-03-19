@@ -1293,12 +1293,19 @@
             return String(t).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
         }
 
+        function itemClaimWeightSum(item) {
+            return Object.values(itemClaims(item)).reduce((a, b) => a + (Number(b) || 0), 0);
+        }
+
         function personLineDollarShare(item, personName) {
             const u = personClaimUnits(item, personName);
             if (u <= 1e-12) return 0;
             const qty = Number(item.quantity) || 1;
             const lineTotal = (item.price || 0) * qty;
-            return lineTotal * (u / qty);
+            if (qty > 1) return lineTotal * (u / qty);
+            const s = itemClaimWeightSum(item);
+            if (s <= 1 + 1e-9) return lineTotal * u;
+            return lineTotal * (u / s);
         }
 
         function itemHasAnyClaims(item) {
@@ -1307,6 +1314,7 @@
 
         function hostMaxClaimForPerson(item, personName) {
             const qty = Number(item.quantity) || 1;
+            if (qty <= 1) return 1e9;
             return Math.max(0, qty - totalClaimedUnits(item) + personClaimUnits(item, personName));
         }
 
@@ -1365,18 +1373,18 @@
                 { parts: 1 / 4, label: '1/4' },
                 { parts: 1 / 3, label: '1/3' },
                 { parts: 1 / 2, label: '1/2' },
-                { parts: 1, label: 'Todo disp.' },
+                { parts: 1, label: TQ <= 1 ? 'Peso 1' : 'Todo disp.' },
             ];
             let presetHtml = '';
             fracPresets.forEach(({ parts, label }) => {
                 let targetUnits;
                 if (parts === 0) targetUnits = 0;
-                else if (parts === 1) targetUnits = maxP;
+                else if (parts === 1) targetUnits = TQ <= 1 ? 1 : maxP;
                 else targetUnits = Math.min(TQ * parts, maxP);
-                if (parts > 0 && maxP < 1e-12) return;
+                if (parts > 0 && maxP < 1e-12 && TQ > 1) return;
                 const sel = parts === 0
                     ? (my <= 1e-12)
-                    : (Math.abs(my - targetUnits) < 1e-4 || (parts === 1 && Math.abs(my - maxP) < 1e-4));
+                    : (Math.abs(my - targetUnits) < 1e-4 || (parts === 1 && TQ > 1 && Math.abs(my - maxP) < 1e-4) || (parts === 1 && TQ <= 1 && Math.abs(my - 1) < 1e-4));
                 const bs = sel ? 'var(--accent)' : 'var(--border)';
                 const bg = sel ? 'var(--accent)' : 'var(--bg-elevated)';
                 const fg = sel ? 'white' : 'var(--text-primary)';
@@ -2329,7 +2337,10 @@
             const hintEl = document.getElementById('modal-assign-hint');
             hintEl.style.display = 'block';
             hintEl.textContent =
-                `${item.quantity > 1 ? item.quantity + '× · ' : ''}$${formatNumber(item.price)} c/u · Usa − / + por unidad entera, o despliega “Fracción / unidades exactas” (1/5 de la línea, decimal, etc.).`;
+                `${item.quantity > 1 ? item.quantity + '× · ' : ''}$${formatNumber(item.price)} c/u · ` +
+                (item.quantity <= 1
+                    ? 'Ítem 1 u.: varios pueden poner “Peso 1”; si la suma de pesos > 1, se divide la línea en proporción. Fracciones ≤ 1 solas = esa parte del ítem.'
+                    : 'Usa − / + por unidad entera, o despliega “Fracción / unidades exactas” (1/5 de la línea, decimal, etc.).');
             
             const modalPeople = document.getElementById('modal-people');
             
