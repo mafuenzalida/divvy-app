@@ -1198,7 +1198,7 @@
 
     <!-- Assign Modal -->
     <div class="modal-overlay" id="assign-modal">
-        <div class="modal">
+        <div class="modal" style="max-width: 460px;">
             <h3 class="modal-title">Asignar item</h3>
             <p class="modal-subtitle" id="modal-item-name">Nombre del item</p>
             <p class="modal-subtitle" id="modal-assign-hint" style="display: none; font-size: 0.8rem;"></p>
@@ -1303,6 +1303,103 @@
 
         function itemHasAnyClaims(item) {
             return Object.values(itemClaims(item)).some(v => Number(v) > 1e-12);
+        }
+
+        function hostMaxClaimForPerson(item, personName) {
+            const qty = Number(item.quantity) || 1;
+            return Math.max(0, qty - totalClaimedUnits(item) + personClaimUnits(item, personName));
+        }
+
+        let __hostAssignPeople = [];
+
+        async function hostAssignDelta(index, delta) {
+            const person = __hostAssignPeople[index];
+            if (!person || !selectedItemId || !currentBill) return;
+            const item = currentBill.items.find(i => i.id === selectedItemId);
+            const cur = personClaimUnits(item, person);
+            const maxP = hostMaxClaimForPerson(item, person);
+            const next = Math.max(0, Math.min(maxP, cur + delta));
+            await adjustHostAssignUnits(person, next);
+        }
+
+        async function adjustHostAssignUnitsByIndex(index, units) {
+            const person = __hostAssignPeople[index];
+            if (person) await adjustHostAssignUnits(person, units);
+        }
+
+        async function hostApplyAssignDecimal(index) {
+            const person = __hostAssignPeople[index];
+            if (!person) return;
+            const el = document.getElementById('hostAssignDec-' + index);
+            const v = parseFloat(el && el.value);
+            if (Number.isNaN(v)) {
+                showToast('Número inválido', 'error');
+                return;
+            }
+            await adjustHostAssignUnits(person, v);
+        }
+
+        async function hostApplyAssignFrac(index, lineQty) {
+            const person = __hostAssignPeople[index];
+            if (!person) return;
+            const a = parseInt((document.getElementById('hostAssignNum-' + index) || {}).value, 10);
+            const b = parseInt((document.getElementById('hostAssignDen-' + index) || {}).value, 10);
+            if (!Number.isFinite(b) || b < 1) {
+                showToast('Denominador inválido', 'error');
+                return;
+            }
+            if (!Number.isFinite(a) || a < 0) {
+                showToast('Numerador inválido', 'error');
+                return;
+            }
+            await adjustHostAssignUnits(person, lineQty * (a / b));
+        }
+
+        function buildHostAssignExtraPanel(item, index) {
+            const maxP = hostMaxClaimForPerson(item, __hostAssignPeople[index]);
+            const TQ = Number(item.quantity) || 1;
+            const my = personClaimUnits(item, __hostAssignPeople[index]);
+            const fracPresets = [
+                { parts: 0, label: 'Ninguno' },
+                { parts: 1 / 5, label: '1/5' },
+                { parts: 1 / 4, label: '1/4' },
+                { parts: 1 / 3, label: '1/3' },
+                { parts: 1 / 2, label: '1/2' },
+                { parts: 1, label: 'Todo disp.' },
+            ];
+            let presetHtml = '';
+            fracPresets.forEach(({ parts, label }) => {
+                let targetUnits;
+                if (parts === 0) targetUnits = 0;
+                else if (parts === 1) targetUnits = maxP;
+                else targetUnits = Math.min(TQ * parts, maxP);
+                if (parts > 0 && maxP < 1e-12) return;
+                const sel = parts === 0
+                    ? (my <= 1e-12)
+                    : (Math.abs(my - targetUnits) < 1e-4 || (parts === 1 && Math.abs(my - maxP) < 1e-4));
+                const bs = sel ? 'var(--accent)' : 'var(--border)';
+                const bg = sel ? 'var(--accent)' : 'var(--bg-elevated)';
+                const fg = sel ? 'white' : 'var(--text-primary)';
+                presetHtml += `<button type="button" onclick="adjustHostAssignUnitsByIndex(${index}, ${targetUnits})" style="font-size:0.72rem;padding:0.3rem 0.45rem;margin:0.12rem;border-radius:8px;border:2px solid ${bs};background:${bg};color:${fg};font-weight:600;cursor:pointer;">${label}</button>`;
+            });
+            return `
+                <details style="width:100%;margin-top:0.45rem;">
+                    <summary style="cursor:pointer;font-size:0.78rem;color:var(--text-muted);user-select:none;">Fracción / unidades exactas (como participante)</summary>
+                    <div style="margin-top:0.45rem;">
+                        <div style="font-size:0.68rem;color:var(--text-muted);margin-bottom:0.25rem;">Atajos (fracción × ${TQ} u.) · máx. ${formatClaimUnits(maxP)}</div>
+                        <div style="display:flex;flex-wrap:wrap;gap:0.2rem;">${presetHtml}</div>
+                        <div style="margin-top:0.45rem;display:flex;gap:0.35rem;align-items:center;flex-wrap:wrap;">
+                            <input type="number" id="hostAssignDec-${index}" step="0.01" min="0" placeholder="Uds." style="width:88px;padding:0.35rem;border-radius:8px;border:1px solid var(--border);background:var(--bg-elevated);color:inherit;" />
+                            <button type="button" class="btn btn-primary" style="font-size:0.78rem;padding:0.35rem 0.55rem" onclick="hostApplyAssignDecimal(${index})">OK</button>
+                        </div>
+                        <div style="margin-top:0.35rem;display:flex;gap:0.35rem;align-items:center;flex-wrap:wrap;">
+                            <input type="number" id="hostAssignNum-${index}" step="1" min="0" placeholder="a" style="width:44px;padding:0.35rem;border-radius:8px;border:1px solid var(--border);background:var(--bg-elevated);color:inherit;" />
+                            <span style="font-size:0.85rem">/</span>
+                            <input type="number" id="hostAssignDen-${index}" step="1" min="1" value="5" placeholder="b" style="width:44px;padding:0.35rem;border-radius:8px;border:1px solid var(--border);background:var(--bg-elevated);color:inherit;" />
+                            <button type="button" class="btn btn-primary" style="font-size:0.78rem;padding:0.35rem 0.55rem" onclick="hostApplyAssignFrac(${index}, ${TQ})">OK</button>
+                        </div>
+                    </div>
+                </details>`;
         }
 
         // Auth functions
@@ -2222,51 +2319,39 @@
             }
         }
 
-        // Assign Modal
+        // Assign Modal (same fractional semantics as participant view)
         function openAssignModal(itemId) {
             selectedItemId = itemId;
             const item = currentBill.items.find(i => i.id === itemId);
+            __hostAssignPeople = [...(currentBill.people || [])];
             
             document.getElementById('modal-item-name').textContent = item.name;
             const hintEl = document.getElementById('modal-assign-hint');
-            if (item.quantity > 1) {
-                hintEl.style.display = 'block';
-                hintEl.textContent = `Hasta ${item.quantity} unidades ($${formatNumber(item.price)} c/u). Usa − / + por persona.`;
-            } else {
-                hintEl.style.display = 'none';
-            }
+            hintEl.style.display = 'block';
+            hintEl.textContent =
+                `${item.quantity > 1 ? item.quantity + '× · ' : ''}$${formatNumber(item.price)} c/u · Usa − / + por unidad entera, o despliega “Fracción / unidades exactas” (1/5 de la línea, decimal, etc.).`;
             
             const modalPeople = document.getElementById('modal-people');
             
             if (currentBill.people.length === 0) {
                 modalPeople.innerHTML = '<p style="color: var(--text-muted); text-align: center;">Primero agrega personas</p>';
-            } else if (item.quantity > 1) {
-                modalPeople.innerHTML = currentBill.people.map((person, index) => {
-                    const count = personClaimUnits(item, person);
-                    const pJs = JSON.stringify(person);
-                    return `
-                    <div class="modal-person modal-person-static ${count > 0 ? 'selected' : ''}">
-                        <div class="modal-person-check">${count > 0 ? '✓' : ''}</div>
-                        <div class="person-avatar avatar-${(index % 6) + 1}">${person.charAt(0)}</div>
-                        <span>${person}</span>
-                        <div class="modal-assign-stepper">
-                            <button type="button" aria-label="Quitar una" onclick='adjustHostAssignUnits(${pJs}, ${Math.max(0, count - 1)})'>−</button>
-                            <span>${count}</span>
-                            <button type="button" aria-label="Agregar una" onclick='adjustHostAssignUnits(${pJs}, ${count + 1})'>+</button>
-                        </div>
-                    </div>`;
-                }).join('');
             } else {
                 modalPeople.innerHTML = currentBill.people.map((person, index) => {
-                    const pJs = JSON.stringify(person);
-                    const has = personClaimUnits(item, person) > 1e-12;
+                    const count = personClaimUnits(item, person);
+                    const has = count > 1e-12;
                     return `
-                    <div class="modal-person ${has ? 'selected' : ''}" onclick='toggleAssignment(${pJs})'>
-                        <div class="modal-person-check">
-                            ${has ? '✓' : ''}
+                    <div class="modal-person modal-person-static ${has ? 'selected' : ''}" style="flex-wrap: wrap; align-items: flex-start;">
+                        <div style="display: flex; align-items: center; gap: 0.75rem; width: 100%;">
+                            <div class="modal-person-check">${has ? '✓' : ''}</div>
+                            <div class="person-avatar avatar-${(index % 6) + 1}">${person.charAt(0)}</div>
+                            <span style="flex: 1; min-width: 0;">${person}</span>
+                            <div class="modal-assign-stepper">
+                                <button type="button" aria-label="Menos una unidad" onclick="hostAssignDelta(${index}, -1)">−</button>
+                                <span>${formatClaimUnits(count)}</span>
+                                <button type="button" aria-label="Más una unidad" onclick="hostAssignDelta(${index}, 1)">+</button>
+                            </div>
                         </div>
-                        <div class="person-avatar avatar-${(index % 6) + 1}">${person.charAt(0)}</div>
-                        <span>${person}</span>
+                        ${buildHostAssignExtraPanel(item, index)}
                     </div>`;
                 }).join('');
             }
@@ -2277,28 +2362,6 @@
         function closeAssignModal() {
             document.getElementById('assign-modal').classList.remove('active');
             selectedItemId = null;
-        }
-
-        async function toggleAssignment(personName) {
-            try {
-                const response = await fetch('/api/assign-item', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        bill_id: currentBill.id,
-                        item_id: selectedItemId,
-                        person_name: personName
-                    })
-                });
-
-                currentBill = await response.json();
-                renderItems();
-                saveState();
-                openAssignModal(selectedItemId); // Refresh modal
-
-            } catch (error) {
-                showToast('Error al asignar', 'error');
-            }
         }
 
         async function adjustHostAssignUnits(personName, targetUnits) {
