@@ -9,7 +9,7 @@ import base64
 import uuid
 import re
 import io
-from typing import Optional
+from typing import Any, Optional
 from datetime import datetime
 
 from fastapi import (
@@ -27,7 +27,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 import secrets
 import asyncio
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, model_validator
 from PIL import Image
 from dotenv import load_dotenv
 
@@ -81,7 +81,34 @@ class BillItem(BaseModel):
     name: str
     price: float
     quantity: int = 1
-    assigned_to: list[str] = []
+    assigned_to: list[str] = Field(default_factory=list)  # legacy; cleared on load
+    claims: dict[str, float] = Field(default_factory=dict)  # person -> units (float, sum <= quantity)
+
+    @model_validator(mode="before")
+    @classmethod
+    def migrate_legacy_assigned(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        raw_claims = data.get("claims")
+        assigned = data.get("assigned_to") or []
+        claims: dict[str, float] = {}
+        if raw_claims is not None and isinstance(raw_claims, dict):
+            for k, v in raw_claims.items():
+                try:
+                    fv = float(v)
+                except (TypeError, ValueError):
+                    continue
+                if fv > 1e-12:
+                    claims[str(k)] = fv
+        if sum(claims.values()) <= 1e-12 and assigned:
+            cnt: dict[str, int] = {}
+            for p in assigned:
+                s = str(p)
+                cnt[s] = cnt.get(s, 0) + 1
+            claims = {k: float(v) for k, v in cnt.items()}
+        data["claims"] = claims
+        data["assigned_to"] = []
+        return data
 
 
 class Bill(BaseModel):
@@ -101,20 +128,33 @@ class Bill(BaseModel):
     fintoc_username: str = ""  # Fintoc username for payment links
 
 
-def set_item_unit_claims_for_person(item: BillItem, person_name: str, units_to_claim: int) -> None:
-    """Set unit slots for one person (names may repeat in assigned_to). Clamped by item.quantity and free slots."""
-    units_to_claim = max(0, int(units_to_claim))
-    current_claims = item.assigned_to.count(person_name)
-    total_claims = len(item.assigned_to)
-    other_claims = total_claims - current_claims
-    available_units = item.quantity - other_claims
-    units_to_claim = min(units_to_claim, item.quantity, available_units)
-    if units_to_claim > current_claims:
-        for _ in range(units_to_claim - current_claims):
-            item.assigned_to.append(person_name)
-    elif units_to_claim < current_claims:
-        for _ in range(current_claims - units_to_claim):
-            item.assigned_to.remove(person_name)
+def item_other_claims_sum(item: BillItem, person_name: str) -> float:
+    return sum(u for p, u in item.claims.items() if p != person_name)
+
+
+def set_item_claim_units(item: BillItem, person_name: str, units: float) -> None:
+    """Set one person's claimed units; clamped so sum(claims) <= quantity (float-safe)."""
+    qty = float(item.quantity) if item.quantity else 1.0
+    units = max(0.0, float(units))
+    others = item_other_claims_sum(item, person_name)
+    max_for_person = max(0.0, qty - others)
+    # Tighten against tiny float overshoot
+    if units > max_for_person:
+        units = max_for_person
+    if units <= 1e-12:
+        item.claims.pop(person_name, None)
+    else:
+        item.claims[person_name] = units
+
+
+def person_line_dollar_share(item: BillItem, person_name: str) -> float:
+    """Dollar amount for this person on this line from their unit claim."""
+    u = item.claims.get(person_name)
+    if u is None or u <= 1e-12:
+        return 0.0
+    qty = float(item.quantity) if item.quantity else 1.0
+    line_total = item.price * item.quantity
+    return line_total * (float(u) / qty)
 
 
 def load_bills_from_storage():
@@ -209,8 +249,8 @@ class AssignItemRequest(BaseModel):
     bill_id: str
     item_id: str
     person_name: str
-    # If set, exact unit count for this person on this item. If omitted, toggle: add 1 or clear all.
-    units: Optional[int] = None
+    # If set, exact units for this person on this item. If omitted, toggle: add 1 or clear all.
+    units: Optional[float] = None
 
 
 class AddPersonRequest(BaseModel):
@@ -266,12 +306,16 @@ class SelfAssignRequest(BaseModel):
     person_name: str
     item_id: str
     assigned: bool  # True to assign, False to unassign
-    units: int = 1  # How many units to claim (for multi-quantity items)
+    units: float = 1.0  # Units to claim (integers or fractions, e.g. 0.2 of quantity 1)
 
 
 class SetBillStatusRequest(BaseModel):
     bill_id: str
     status: str  # draft, ready, closed
+
+
+class SplitBillEquallyRequest(BaseModel):
+    bill_id: str
 
 
 class AuthRequest(BaseModel):
@@ -706,7 +750,7 @@ async def scan_bill(file: UploadFile = File(...)):
                 name=item["name"],
                 price=float(item["price"]),
                 quantity=int(item.get("quantity", 1)) or 1,  # Convert to int, default 1
-                assigned_to=[],
+                claims={},
             )
             for item in parsed_data.get("items", [])
         ]
@@ -784,7 +828,9 @@ async def restore_bill(bill: Bill):
         db_by_id = {i.id: i for i in existing_bill.items}
         for client_item in bill.items:
             if client_item.id in db_by_id:
-                client_item.assigned_to = list(db_by_id[client_item.id].assigned_to)
+                db_item = db_by_id[client_item.id]
+                client_item.claims = dict(db_item.claims)
+                client_item.assigned_to = []
 
     # Recalculate totals to ensure consistency
     bill = recalculate_bill_totals(bill)
@@ -859,10 +905,9 @@ async def remove_person(request: AddPersonRequest):
 
     if request.person_name in bill.people:
         bill.people.remove(request.person_name)
-        # Also remove from all item assignments (all unit slots)
+        # Also remove from all item claims
         for item in bill.items:
-            while request.person_name in item.assigned_to:
-                item.assigned_to.remove(request.person_name)
+            item.claims.pop(request.person_name, None)
         # Also remove from paid list
         if request.person_name in bill.paid_by:
             bill.paid_by.remove(request.person_name)
@@ -885,13 +930,36 @@ async def assign_item(request: AssignItemRequest):
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
 
-    current = item.assigned_to.count(request.person_name)
+    current = float(item.claims.get(request.person_name, 0) or 0)
     if request.units is not None:
-        set_item_unit_claims_for_person(item, request.person_name, request.units)
-    elif current > 0:
-        set_item_unit_claims_for_person(item, request.person_name, 0)
+        set_item_claim_units(item, request.person_name, request.units)
+    elif current > 1e-12:
+        set_item_claim_units(item, request.person_name, 0)
     else:
-        set_item_unit_claims_for_person(item, request.person_name, 1)
+        set_item_claim_units(item, request.person_name, 1.0)
+
+    save_bill(bill)
+    return bill
+
+
+@app.post("/api/split-bill-equally")
+async def split_bill_equally(request: SplitBillEquallyRequest):
+    """Split each line's units equally among all people on the bill (host action)."""
+    bill = fetch_bill(request.bill_id)
+    if not bill:
+        raise HTTPException(status_code=404, detail="Bill not found")
+    if bill.locked:
+        raise HTTPException(status_code=403, detail="Bill is locked")
+    n = len(bill.people)
+    if n == 0:
+        raise HTTPException(status_code=400, detail="Add people first")
+
+    per = 1.0 / float(n)
+    for item in bill.items:
+        item.claims = {}
+        share = float(item.quantity) * per
+        for p in bill.people:
+            item.claims[p] = share
 
     save_bill(bill)
     return bill
@@ -934,7 +1002,7 @@ async def add_item(request: AddItemRequest):
         name=request.name,
         price=request.price,
         quantity=request.quantity,
-        assigned_to=[],
+        claims={},
     )
 
     bill.items.append(new_item)
@@ -1018,11 +1086,9 @@ async def get_bill_for_participant(bill_id: str):
     person_totals = {person: 0.0 for person in bill.people}
 
     for item in bill.items:
-        if item.assigned_to:
-            share = (item.price * item.quantity) / len(item.assigned_to)
-            for person in item.assigned_to:
-                if person in person_totals:
-                    person_totals[person] += share
+        for person, units in item.claims.items():
+            if person in person_totals and units > 1e-12:
+                person_totals[person] += person_line_dollar_share(item, person)
 
     # Add proportional tip and tax
     if bill.subtotal > 0:
@@ -1095,15 +1161,10 @@ async def self_assign_item(bill_id: str, request: SelfAssignRequest):
     if request.person_name not in bill.people:
         raise HTTPException(status_code=400, detail="Person not in bill")
 
-    # For multi-quantity items, we allow claiming specific units
-    # Each claim adds the person's name to assigned_to (can appear multiple times)
-    # This way, split calculation naturally divides by total claims
-
     if request.assigned:
-        units_to_claim = min(request.units, item.quantity)
-        set_item_unit_claims_for_person(item, request.person_name, units_to_claim)
+        set_item_claim_units(item, request.person_name, request.units)
     else:
-        set_item_unit_claims_for_person(item, request.person_name, 0)
+        set_item_claim_units(item, request.person_name, 0)
 
     # Save with force_refresh to ensure we have latest data
     save_bill(bill)
@@ -1166,11 +1227,9 @@ async def calculate_splits(bill_id: str):
     person_totals = {person: 0.0 for person in bill.people}
 
     for item in bill.items:
-        if item.assigned_to:
-            # Split item among assigned people
-            split_amount = (item.price * item.quantity) / len(item.assigned_to)
-            for person in item.assigned_to:
-                person_totals[person] += split_amount
+        for person, units in item.claims.items():
+            if units > 1e-12 and person in person_totals:
+                person_totals[person] += person_line_dollar_share(item, person)
 
     # Calculate proportional tax and tip
     items_subtotal = sum(item.price * item.quantity for item in bill.items)

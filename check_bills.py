@@ -45,14 +45,20 @@ try:
             print(f"   Created: {bill_data.get('created_at', 'N/A')}")
             print(f"   Locked: {bill_data.get('locked', False)}")
             
-            # Show item assignments
+            # Show item assignments (claims map preferred; legacy assigned_to)
             items = bill_data.get('items', [])
             if items:
                 print(f"   Item Assignments:")
                 for item in items:
-                    assigned = item.get('assigned_to', [])
-                    if assigned:
-                        print(f"     - {item.get('name', 'N/A')}: {', '.join(assigned)}")
+                    claims = item.get('claims') or {}
+                    if claims and isinstance(claims, dict):
+                        parts = [f"{n}: {u}" for n, u in claims.items() if u]
+                        if parts:
+                            print(f"     - {item.get('name', 'N/A')}: {', '.join(parts)}")
+                    else:
+                        assigned = item.get('assigned_to', [])
+                        if assigned:
+                            print(f"     - {item.get('name', 'N/A')}: {', '.join(assigned)}")
     
     # If a specific bill ID is provided, show full details
     import sys

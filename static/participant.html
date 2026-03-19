@@ -819,12 +819,74 @@
         </div>
     </div>
 
+    <!-- Share modal: fractions / decimals for your part of a line (esp. quantity 1) -->
+    <div id="share-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center;">
+        <div style="background: var(--bg-card); border-radius: 16px; padding: 1.5rem; max-width: 340px; width: 90%; border: 1px solid var(--border);">
+            <h3 style="margin-bottom: 0.5rem; font-size: 1.1rem;">Tu parte</h3>
+            <p id="share-item-name" style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.75rem;"></p>
+            <p id="share-max-hint" style="color: var(--text-muted); font-size: 0.75rem; margin-bottom: 1rem;"></p>
+            <div id="share-quick-buttons" style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;"></div>
+            <div style="margin-bottom: 0.75rem;">
+                <label style="display:block; font-size: 0.8rem; margin-bottom: 0.25rem;">Decimal (ej. 0.2 = 20% del ítem)</label>
+                <div style="display: flex; gap: 0.5rem;">
+                    <input type="number" id="share-decimal" step="0.01" min="0" style="flex:1; padding: 0.5rem; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-elevated); color: inherit;" />
+                    <button type="button" onclick="applyShareDecimal()" style="padding: 0.5rem 1rem; border-radius: 8px; border: none; background: var(--accent); color: white; font-weight: 600; cursor: pointer;">OK</button>
+                </div>
+            </div>
+            <div style="margin-bottom: 1rem;">
+                <label style="display:block; font-size: 0.8rem; margin-bottom: 0.25rem;">Fracción (pagas a/b del ítem)</label>
+                <div style="display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap;">
+                    <input type="number" id="share-num" step="1" min="0" style="width: 56px; padding: 0.5rem; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-elevated); color: inherit;" />
+                    <span>/</span>
+                    <input type="number" id="share-den" step="1" min="1" style="width: 56px; padding: 0.5rem; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-elevated); color: inherit;" />
+                    <button type="button" onclick="applyShareFraction()" style="padding: 0.5rem 1rem; border-radius: 8px; border: none; background: var(--accent); color: white; font-weight: 600; cursor: pointer;">OK</button>
+                </div>
+            </div>
+            <button onclick="closeShareModal()" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.85rem; width:100%;">Cancelar</button>
+        </div>
+    </div>
+
     <script>
         const pathParts = window.location.pathname.split('/');
         const billId = pathParts[pathParts.length - 1];
 
         let billData = null;
         let currentIdentity = null;
+        let pendingShareItemId = null;
+        let pendingShareMax = 0;
+
+        function itemClaims(item) {
+            const c = item.claims;
+            if (c && typeof c === 'object' && !Array.isArray(c)) return { ...c };
+            const o = {};
+            (item.assigned_to || []).forEach(p => { o[p] = (o[p] || 0) + 1; });
+            return o;
+        }
+
+        function totalClaimedUnits(item) {
+            return Object.values(itemClaims(item)).reduce((a, b) => a + (Number(b) || 0), 0);
+        }
+
+        function personClaimUnits(item, personName) {
+            return Number(itemClaims(item)[personName]) || 0;
+        }
+
+        function formatClaimUnits(u) {
+            const x = Number(u);
+            if (!Number.isFinite(x) || x === 0) return '0';
+            const r = Math.round(x);
+            if (Math.abs(x - r) < 1e-5) return String(r);
+            const t = Math.round(x * 10000) / 10000;
+            return String(t).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+        }
+
+        function personLineDollarShare(item, personName) {
+            const u = personClaimUnits(item, personName);
+            if (u <= 1e-12) return 0;
+            const qty = Number(item.quantity) || 1;
+            const lineTotal = (item.price || 0) * qty;
+            return lineTotal * (u / qty);
+        }
 
         document.addEventListener('DOMContentLoaded', async () => {
             await loadBill();
@@ -985,45 +1047,42 @@
             const isClosed = (bill.status || 'draft') === 'closed';
             const canEdit = !isLocked && !isClosed;
             
-            // Update items count
-            const myItems = items.filter(i => i.assigned_to?.includes(currentIdentity)).length;
+            // Update items count (lines where you have a positive claim)
+            const myItems = items.filter(i => personClaimUnits(i, currentIdentity) > 1e-12).length;
             const lockIndicator = !canEdit ? ' 🔒' : '';
             document.getElementById('items-count').textContent = `${myItems}/${items.length} seleccionados${lockIndicator}`;
             
             container.innerHTML = items.map(item => {
-                // Count how many units current user has claimed
-                const myClaims = item.assigned_to?.filter(p => p === currentIdentity).length || 0;
-                const isAssigned = myClaims > 0;
-                const totalClaims = item.assigned_to?.length || 0;
+                const myClaims = personClaimUnits(item, currentIdentity);
+                const isAssigned = myClaims > 1e-12;
+                const totalClaimed = totalClaimedUnits(item);
                 
-                // Build assignees text with claim counts
-                const assigneeCounts = {};
-                (item.assigned_to || []).forEach(p => {
-                    assigneeCounts[p] = (assigneeCounts[p] || 0) + 1;
-                });
-                const assigneesText = Object.keys(assigneeCounts).length > 0
-                    ? Object.entries(assigneeCounts).map(([name, count]) => 
-                        item.quantity > 1 && count > 0 ? `${name} (${count})` : name
-                      ).join(', ')
+                const assigneesText = Object.keys(itemClaims(item)).filter(n => Number(itemClaims(item)[n]) > 1e-12).length > 0
+                    ? Object.entries(itemClaims(item))
+                        .filter(([_, u]) => Number(u) > 1e-12)
+                        .map(([name, u]) => `${name} (${formatClaimUnits(u)})`)
+                        .join(', ')
                     : 'Sin asignar';
                 
-                // For multi-quantity items, show how many units claimed
-                const claimedIndicator = item.quantity > 1 && myClaims > 0 
-                    ? `<span style="color: var(--success); font-size: 0.7rem; margin-left: 4px;">${myClaims}/${item.quantity}</span>` 
+                const claimedIndicator = isAssigned
+                    ? `<span style="color: var(--success); font-size: 0.7rem; margin-left: 4px;">${formatClaimUnits(myClaims)}/${item.quantity} uds</span>` 
                     : '';
                 
-                // Determine click action: for multi-qty items, show modal; for single items, toggle
                 const clickAction = canEdit 
                     ? (item.quantity > 1 
-                        ? `showQtyModal('${item.id}', '${escapeHtml(item.name)}', ${item.quantity}, ${myClaims}, ${totalClaims})`
-                        : `toggleItem('${item.id}', ${!isAssigned}, 1)`)
+                        ? `showQtyModal('${item.id}', '${escapeHtml(item.name)}', ${item.quantity}, ${myClaims}, ${totalClaimed})`
+                        : `showShareModal('${item.id}')`)
                     : '';
+                
+                const badgeLabel = isAssigned && (myClaims > 1 + 1e-6 || Math.abs(myClaims - Math.round(myClaims)) > 1e-5)
+                    ? `<span style="font-size: 0.6rem;">${formatClaimUnits(myClaims)}</span>` 
+                    : (isAssigned ? `<span style="font-size: 0.6rem;">✓</span>` : '');
                 
                 return `
                     <div class="item-row">
                         <div class="item-checkbox ${isAssigned ? 'checked' : ''} ${!canEdit ? 'disabled' : ''}" 
                              onclick="${clickAction}">
-                             ${myClaims > 1 ? `<span style="font-size: 0.6rem;">${myClaims}</span>` : ''}
+                             ${badgeLabel}
                         </div>
                         <div class="item-info">
                             <div class="item-name">
@@ -1043,7 +1102,7 @@
         let pendingItemId = null;
         let pendingItemQty = null;
         
-        function showQtyModal(itemId, itemName, totalQty, myClaims, totalClaims) {
+        function showQtyModal(itemId, itemName, totalQty, myClaims, totalClaimed) {
             pendingItemId = itemId;
             pendingItemQty = totalQty;
             
@@ -1053,14 +1112,16 @@
             
             itemNameEl.textContent = `${totalQty}x ${itemName}`;
             
-            // Calculate available units (item qty - claims from others)
-            const otherClaims = totalClaims - myClaims;
-            const maxCanClaim = totalQty - otherClaims;
+            const my = Number(myClaims) || 0;
+            const tot = Number(totalClaimed) || 0;
+            const otherClaims = tot - my;
+            const maxCanClaim = Math.max(0, Math.floor(totalQty - otherClaims + 1e-9));
             
             // Generate buttons: 0 (none), 1, 2, ... up to maxCanClaim
             let buttonsHtml = '';
+            const myInt = Math.min(maxCanClaim, Math.round(my));
             for (let i = 0; i <= maxCanClaim; i++) {
-                const isSelected = i === myClaims;
+                const isSelected = i === myInt;
                 const label = i === 0 ? 'Ninguno' : i.toString();
                 buttonsHtml += `
                     <button onclick="selectQty(${i})" style="
@@ -1090,7 +1151,93 @@
         async function selectQty(units) {
             if (!pendingItemId) return;
             closeQtyModal();
-            await toggleItem(pendingItemId, units > 0, units);
+            await toggleItem(pendingItemId, units > 0, Number(units));
+        }
+
+        function showShareModal(itemId) {
+            const item = billData.bill.items.find(i => i.id === itemId);
+            if (!item) return;
+            pendingShareItemId = itemId;
+            const my = personClaimUnits(item, currentIdentity);
+            const otherSum = totalClaimedUnits(item) - my;
+            pendingShareMax = Math.max(0, Number(item.quantity) - otherSum);
+            
+            document.getElementById('share-item-name').textContent =
+                (item.quantity > 1 ? `${item.quantity}x ` : '') + item.name;
+            document.getElementById('share-max-hint').textContent =
+                `Máximo a reclamar ahora: ${formatClaimUnits(pendingShareMax)} de ${item.quantity} u. · Tu parte actual: ${formatClaimUnits(my)}`;
+            document.getElementById('share-decimal').value = my > 1e-12 ? formatClaimUnits(my) : '';
+            document.getElementById('share-num').value = '';
+            document.getElementById('share-den').value = '5';
+            
+            const btnStyle = (active) => `
+                padding: 0.5rem 0.75rem;
+                border-radius: 10px;
+                border: 2px solid ${active ? 'var(--accent)' : 'var(--border)'};
+                background: ${active ? 'var(--accent)' : 'var(--bg-elevated)'};
+                color: ${active ? 'white' : 'var(--text-primary)'};
+                font-size: 0.85rem;
+                font-weight: 600;
+                cursor: pointer;
+            `;
+            const presets = [
+                { v: 0, label: 'Ninguno' },
+                { v: 1 / 5, label: '1/5' },
+                { v: 1 / 4, label: '1/4' },
+                { v: 1 / 3, label: '1/3' },
+                { v: 0.5, label: '1/2' },
+                { v: 1, label: 'Todo' },
+            ];
+            let qh = '';
+            presets.forEach(({ v, label }) => {
+                if (v > pendingShareMax + 1e-9 && v > 1e-12) return;
+                const sel = Math.abs(my - v) < 1e-5 || (v === 0 && my <= 1e-12);
+                qh += `<button type="button" onclick="applySharePreset(${v})" style="${btnStyle(sel)}">${label}</button>`;
+            });
+            document.getElementById('share-quick-buttons').innerHTML = qh;
+            document.getElementById('share-modal').style.display = 'flex';
+        }
+
+        function closeShareModal() {
+            document.getElementById('share-modal').style.display = 'none';
+            pendingShareItemId = null;
+            pendingShareMax = 0;
+        }
+
+        async function applySharePreset(v) {
+            await applyShareUnits(Number(v));
+        }
+
+        async function applyShareDecimal() {
+            const v = parseFloat(document.getElementById('share-decimal').value);
+            if (Number.isNaN(v)) {
+                showToast('Número inválido', 'error');
+                return;
+            }
+            await applyShareUnits(v);
+        }
+
+        async function applyShareFraction() {
+            const a = parseInt(document.getElementById('share-num').value, 10);
+            const b = parseInt(document.getElementById('share-den').value, 10);
+            if (!Number.isFinite(b) || b < 1) {
+                showToast('Denominador inválido', 'error');
+                return;
+            }
+            if (!Number.isFinite(a) || a < 0) {
+                showToast('Numerador inválido', 'error');
+                return;
+            }
+            await applyShareUnits(a / b);
+        }
+
+        async function applyShareUnits(u) {
+            if (!pendingShareItemId) return;
+            const id = pendingShareItemId;
+            const max = pendingShareMax;
+            closeShareModal();
+            const clamped = Math.max(0, Math.min(Number(u) || 0, max));
+            await toggleItem(id, clamped > 1e-12, clamped);
         }
 
         async function toggleItem(itemId, assign, units = 1) {
@@ -1103,7 +1250,7 @@
                         person_name: currentIdentity,
                         item_id: itemId,
                         assigned: assign,
-                        units: units
+                        units: Number(units)
                     })
                 });
                 
@@ -1133,8 +1280,7 @@
             const bill = billData.bill;
             const items = bill.items || [];
             
-            // Get items assigned to current user
-            const myItems = items.filter(item => item.assigned_to?.includes(currentIdentity));
+            const myItems = items.filter(item => personClaimUnits(item, currentIdentity) > 1e-12);
             
             if (myItems.length === 0) {
                 card.style.display = 'none';
@@ -1143,28 +1289,16 @@
             
             card.style.display = 'block';
             
-            // Calculate item shares
             let subtotal = 0;
             const itemsHtml = myItems.map(item => {
-                const totalPrice = item.price * item.quantity;
-                const totalClaims = item.assigned_to.length;
-                const myClaims = item.assigned_to.filter(p => p === currentIdentity).length;
-                
-                // My share = (total price / total claims) * my claims
-                const myShare = (totalPrice / totalClaims) * myClaims;
+                const myU = personClaimUnits(item, currentIdentity);
+                const myShare = personLineDollarShare(item, currentIdentity);
                 subtotal += myShare;
                 
-                // Show claim info: for multi-qty items, show "2/3 units" or "÷3 people"
-                let sharedText = '';
-                if (item.quantity > 1) {
-                    // Multi-quantity: show units claimed
-                    sharedText = `${myClaims}/${item.quantity} uds`;
-                    if (totalClaims > myClaims) {
-                        sharedText += ` (÷${totalClaims})`;
-                    }
-                } else if (totalClaims > 1) {
-                    // Single item shared
-                    sharedText = `÷${totalClaims}`;
+                const othersN = Object.keys(itemClaims(item)).filter(p => Number(itemClaims(item)[p]) > 1e-12).length;
+                let sharedText = `${formatClaimUnits(myU)}/${item.quantity} uds`;
+                if (othersN > 1) {
+                    sharedText += ` · ${othersN} personas`;
                 }
                 
                 return `

@@ -1268,6 +1268,43 @@
         const BILLS_STORAGE_KEY = 'cobrof_all_bills';
         const AUTH_STORAGE_KEY = 'cobrof_auth';
 
+        function itemClaims(item) {
+            const c = item.claims;
+            if (c && typeof c === 'object' && !Array.isArray(c)) return { ...c };
+            const o = {};
+            (item.assigned_to || []).forEach(p => { o[p] = (o[p] || 0) + 1; });
+            return o;
+        }
+
+        function totalClaimedUnits(item) {
+            return Object.values(itemClaims(item)).reduce((a, b) => a + (Number(b) || 0), 0);
+        }
+
+        function personClaimUnits(item, personName) {
+            return Number(itemClaims(item)[personName]) || 0;
+        }
+
+        function formatClaimUnits(u) {
+            const x = Number(u);
+            if (!Number.isFinite(x) || x === 0) return '0';
+            const r = Math.round(x);
+            if (Math.abs(x - r) < 1e-5) return String(r);
+            const t = Math.round(x * 10000) / 10000;
+            return String(t).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+        }
+
+        function personLineDollarShare(item, personName) {
+            const u = personClaimUnits(item, personName);
+            if (u <= 1e-12) return 0;
+            const qty = Number(item.quantity) || 1;
+            const lineTotal = (item.price || 0) * qty;
+            return lineTotal * (u / qty);
+        }
+
+        function itemHasAnyClaims(item) {
+            return Object.values(itemClaims(item)).some(v => Number(v) > 1e-12);
+        }
+
         // Auth functions
         async function checkAuth() {
             const savedPassword = localStorage.getItem(AUTH_STORAGE_KEY) || '';
@@ -2026,9 +2063,9 @@
                             ${item.quantity > 1 ? `<span style="color: var(--text-muted); font-size: 0.75rem; margin-left: 0.3rem;">($${formatNumber(item.price)} c/u)</span>` : ''}
                             ${item.quantity === 1 && /^[0-9]+[xX×*]/i.test(String(item.name || '').trim()) ? '<span class="item-qty-hint">Tip: el nombre parece traer cantidad — sube la cantidad del ítem para que cada persona elija cuántas tomó.</span>' : ''}
                         </div>
-                        <div class="item-assignees">
-                            ${item.assigned_to.map((person, i) => 
-                                `<span class="assignee-badge" onclick="quickUnassign('${item.id}', '${person}')" title="Click para quitar">${person}</span>`
+                            <div class="item-assignees">
+                            ${Object.entries(itemClaims(item)).filter(([_, u]) => Number(u) > 1e-12).map(([person, u]) =>
+                                `<span class="assignee-badge" onclick="quickUnassign('${item.id}', ${JSON.stringify(person)})" title="Click para quitar">${person} (${formatClaimUnits(u)})</span>`
                             ).join('')}
                         </div>
                     </div>
@@ -2205,7 +2242,7 @@
                 modalPeople.innerHTML = '<p style="color: var(--text-muted); text-align: center;">Primero agrega personas</p>';
             } else if (item.quantity > 1) {
                 modalPeople.innerHTML = currentBill.people.map((person, index) => {
-                    const count = item.assigned_to.filter(p => p === person).length;
+                    const count = personClaimUnits(item, person);
                     const pJs = JSON.stringify(person);
                     return `
                     <div class="modal-person modal-person-static ${count > 0 ? 'selected' : ''}">
@@ -2222,10 +2259,11 @@
             } else {
                 modalPeople.innerHTML = currentBill.people.map((person, index) => {
                     const pJs = JSON.stringify(person);
+                    const has = personClaimUnits(item, person) > 1e-12;
                     return `
-                    <div class="modal-person ${item.assigned_to.includes(person) ? 'selected' : ''}" onclick='toggleAssignment(${pJs})'>
+                    <div class="modal-person ${has ? 'selected' : ''}" onclick='toggleAssignment(${pJs})'>
                         <div class="modal-person-check">
-                            ${item.assigned_to.includes(person) ? '✓' : ''}
+                            ${has ? '✓' : ''}
                         </div>
                         <div class="person-avatar avatar-${(index % 6) + 1}">${person.charAt(0)}</div>
                         <span>${person}</span>
@@ -2265,7 +2303,7 @@
 
         async function adjustHostAssignUnits(personName, targetUnits) {
             if (!currentBill || !selectedItemId || currentBill.locked) return;
-            const u = Math.max(0, parseInt(targetUnits, 10) || 0);
+            const u = Math.max(0, parseFloat(targetUnits) || 0);
             try {
                 const response = await fetch('/api/assign-item', {
                     method: 'POST',
@@ -2430,9 +2468,10 @@
             if (!personName || !currentBill || currentBill.locked) return;
             
             const item = currentBill.items.find(i => i.id === itemId);
-            if (item && item.assigned_to.includes(personName)) {
-                if (item.quantity > 1 && item.assigned_to.length < item.quantity) {
-                    const current = item.assigned_to.filter(p => p === personName).length;
+            if (item && personClaimUnits(item, personName) > 1e-12) {
+                const totalU = totalClaimedUnits(item);
+                if (item.quantity > 1 && totalU < item.quantity - 1e-9) {
+                    const current = personClaimUnits(item, personName);
                     try {
                         const response = await fetch('/api/assign-item', {
                             method: 'POST',
@@ -2489,22 +2528,20 @@
                 return;
             }
             
-            // Assign all people to all items
-            for (const item of currentBill.items) {
-                item.assigned_to = [...currentBill.people];
-            }
-            
-            // Save to backend
             try {
-                await fetch('/api/restore-bill', {
+                const response = await fetch('/api/split-bill-equally', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(currentBill)
+                    body: JSON.stringify({ bill_id: currentBill.id })
                 });
+                if (response.ok) {
+                    currentBill = await response.json();
+                }
             } catch (e) {}
             
             saveState();
             renderItems();
+            renderPaymentTracking();
             showToast(`Dividido en ${currentBill.people.length} partes iguales`, 'success');
         }
 
@@ -2516,7 +2553,7 @@
                 return;
             }
 
-            const hasAssignments = currentBill.items.some(item => item.assigned_to.length > 0);
+            const hasAssignments = currentBill.items.some(item => itemHasAnyClaims(item));
             if (!hasAssignments) {
                 showToast('Asigna items a las personas', 'error');
                 return;
@@ -2548,7 +2585,7 @@
             }
             
             // Check if any items have assignments
-            const hasAssignments = currentBill.items.some(item => item.assigned_to && item.assigned_to.length > 0);
+            const hasAssignments = currentBill.items.some(item => itemHasAnyClaims(item));
             if (!hasAssignments) {
                 container.style.display = 'none';
                 return;
@@ -2561,14 +2598,11 @@
             currentBill.people.forEach(p => personTotals[p] = 0);
             
             currentBill.items.forEach(item => {
-                if (item.assigned_to && item.assigned_to.length > 0) {
-                    const share = (item.price * item.quantity) / item.assigned_to.length;
-                    item.assigned_to.forEach(person => {
-                        if (personTotals[person] !== undefined) {
-                            personTotals[person] += share;
-                        }
-                    });
-                }
+                Object.keys(itemClaims(item)).forEach(person => {
+                    if (personTotals[person] !== undefined) {
+                        personTotals[person] += personLineDollarShare(item, person);
+                    }
+                });
             });
             
             // Add proportional tip/tax
@@ -2641,14 +2675,16 @@
             function getPersonItems(personName) {
                 const items = [];
                 currentBill.items.forEach(item => {
-                    if (item.assigned_to.includes(personName)) {
-                        const splitCount = item.assigned_to.length;
-                        const itemTotal = (item.price * item.quantity) / splitCount;
+                    const u = personClaimUnits(item, personName);
+                    if (u > 1e-12) {
+                        const itemTotal = personLineDollarShare(item, personName);
+                        const others = Object.keys(itemClaims(item)).filter(p => Number(itemClaims(item)[p]) > 1e-12).length;
                         items.push({
                             name: item.name,
                             quantity: item.quantity,
                             total: itemTotal,
-                            shared: splitCount > 1 ? splitCount : 0
+                            units: u,
+                            shared: others > 1 ? others : 0
                         });
                     }
                 });
@@ -2667,7 +2703,7 @@
                     const itemsDetail = personItems.map(item => {
                         let detail = `  - ${item.name}`;
                         if (item.quantity > 1) detail += ` (${item.quantity}x)`;
-                        if (item.shared > 0) detail += ` ÷${item.shared}`;
+                        if (item.shared > 0) detail += ` (${formatClaimUnits(item.units)} u.)`;
                         detail += `: $${formatNumber(item.total)}`;
                         return detail;
                     }).join('\n');
