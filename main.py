@@ -101,6 +101,22 @@ class Bill(BaseModel):
     fintoc_username: str = ""  # Fintoc username for payment links
 
 
+def set_item_unit_claims_for_person(item: BillItem, person_name: str, units_to_claim: int) -> None:
+    """Set unit slots for one person (names may repeat in assigned_to). Clamped by item.quantity and free slots."""
+    units_to_claim = max(0, int(units_to_claim))
+    current_claims = item.assigned_to.count(person_name)
+    total_claims = len(item.assigned_to)
+    other_claims = total_claims - current_claims
+    available_units = item.quantity - other_claims
+    units_to_claim = min(units_to_claim, item.quantity, available_units)
+    if units_to_claim > current_claims:
+        for _ in range(units_to_claim - current_claims):
+            item.assigned_to.append(person_name)
+    elif units_to_claim < current_claims:
+        for _ in range(current_claims - units_to_claim):
+            item.assigned_to.remove(person_name)
+
+
 def load_bills_from_storage():
     """Load bills from persistent storage (Turso or local file)."""
     global bills_storage
@@ -193,6 +209,8 @@ class AssignItemRequest(BaseModel):
     bill_id: str
     item_id: str
     person_name: str
+    # If set, exact unit count for this person on this item. If omitted, toggle: add 1 or clear all.
+    units: Optional[int] = None
 
 
 class AddPersonRequest(BaseModel):
@@ -296,6 +314,7 @@ Return ONLY a valid JSON object (no markdown, no explanation) with this structur
 
 Rules:
 - List every item you can see with its price
+- For each item set "quantity" to the count sold (default 1). If the line shows "3 x Beer" or "2 Café", use 3 or 2 and set "price" to the UNIT price (line total ÷ quantity). If only a line total exists, use quantity 1 and that price.
 - Prices must be numbers (integers or decimals)
 - Include tax/IVA if shown
 - Include tip/propina if shown
@@ -315,7 +334,7 @@ Rules:
     except ValueError as e:
         if "blocked" in str(e).lower() or "empty" in str(e).lower():
             # Try with a simpler prompt
-            simple_prompt = 'List all items and prices from this receipt as JSON: {"items": [{"name": "...", "price": 0}], "total": 0}'
+            simple_prompt = 'List all items from this receipt as JSON: {"items": [{"name": "...", "price": 0, "quantity": 1}], "total": 0}. Use quantity>1 when a line shows multiples; price = unit price.'
             response = model.generate_content([simple_prompt, image])
             if not response.candidates:
                 raise ValueError(
@@ -439,19 +458,32 @@ def parse_bill_with_tesseract(image_bytes: bytes) -> dict:
                 name = re.sub(
                     r"\s*\$?\s*\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})?\s*$", "", line
                 ).strip()
-                name = re.sub(
-                    r"\s*x?\s*\d+\s*$", "", name
-                ).strip()  # Remove quantity suffix
+                qty = 1
+                prefix_m = re.match(r"^(\d+)\s*[xX\*×]\s*(.+)$", name)
+                if prefix_m:
+                    qty = int(prefix_m.group(1))
+                    name = prefix_m.group(2).strip()
+                else:
+                    suffix_m = re.match(r"^(.+?)\s+[xX\*×]\s*(\d+)\s*$", name)
+                    if suffix_m:
+                        name = suffix_m.group(1).strip()
+                        qty = int(suffix_m.group(2))
+                    else:
+                        name = re.sub(
+                            r"\s*x?\s*\d+\s*$", "", name
+                        ).strip()  # Remove trailing qty-like suffix
 
                 if name and len(name) > 1:
+                    line_total = price_match
+                    unit_price = line_total / qty if qty > 1 else line_total
                     items.append(
                         {
                             "name": name[:50],  # Limit name length
-                            "price": price_match,
-                            "quantity": 1,
+                            "price": unit_price,
+                            "quantity": qty,
                         }
                     )
-                    subtotal += price_match
+                    subtotal += line_total
 
     # If no total found, calculate it
     if total == 0:
@@ -488,6 +520,7 @@ def parse_bill_with_openai(image_base64: str) -> dict:
     
     Rules:
     - Extract ALL items from the receipt
+    - For each item set "quantity" to how many units that line represents (e.g. "4 x Pizza" → quantity 4). Use "price" as UNIT price (line total ÷ quantity when quantity > 1).
     - Prices should be numbers (not strings)
     - If tax (IVA, impuesto) is shown separately, include it
     - If tip (propina, service) is shown, include it
@@ -747,12 +780,11 @@ async def restore_bill(bill: Bill):
         # Preserve people and assignments from DB (they might have been updated by participants)
         # But allow client to update items, totals, etc.
         bill.people = existing_bill.people if existing_bill.people else bill.people
-        # Merge item assignments - keep assignments from DB if item exists
-        for db_item in existing_bill.items:
-            client_item = next((i for i in bill.items if i.id == db_item.id), None)
-            if client_item and db_item.assigned_to:
-                # Preserve DB assignments if they exist
-                client_item.assigned_to = db_item.assigned_to
+        # Assignments always come from DB for matching item ids (including empty list)
+        db_by_id = {i.id: i for i in existing_bill.items}
+        for client_item in bill.items:
+            if client_item.id in db_by_id:
+                client_item.assigned_to = list(db_by_id[client_item.id].assigned_to)
 
     # Recalculate totals to ensure consistency
     bill = recalculate_bill_totals(bill)
@@ -827,9 +859,9 @@ async def remove_person(request: AddPersonRequest):
 
     if request.person_name in bill.people:
         bill.people.remove(request.person_name)
-        # Also remove from all item assignments
+        # Also remove from all item assignments (all unit slots)
         for item in bill.items:
-            if request.person_name in item.assigned_to:
+            while request.person_name in item.assigned_to:
                 item.assigned_to.remove(request.person_name)
         # Also remove from paid list
         if request.person_name in bill.paid_by:
@@ -853,11 +885,13 @@ async def assign_item(request: AssignItemRequest):
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
 
-    # Toggle assignment
-    if request.person_name in item.assigned_to:
-        item.assigned_to.remove(request.person_name)
+    current = item.assigned_to.count(request.person_name)
+    if request.units is not None:
+        set_item_unit_claims_for_person(item, request.person_name, request.units)
+    elif current > 0:
+        set_item_unit_claims_for_person(item, request.person_name, 0)
     else:
-        item.assigned_to.append(request.person_name)
+        set_item_unit_claims_for_person(item, request.person_name, 1)
 
     save_bill(bill)
     return bill
@@ -1066,34 +1100,10 @@ async def self_assign_item(bill_id: str, request: SelfAssignRequest):
     # This way, split calculation naturally divides by total claims
 
     if request.assigned:
-        # How many units to claim (default 1, max = item.quantity)
         units_to_claim = min(request.units, item.quantity)
-
-        # Count how many units this person already has
-        current_claims = item.assigned_to.count(request.person_name)
-
-        # Count total claims on this item
-        total_claims = len(item.assigned_to)
-
-        # Calculate available units (quantity - claims from others)
-        other_claims = total_claims - current_claims
-        available_units = item.quantity - other_claims
-
-        # Adjust units to claim if needed
-        units_to_claim = min(units_to_claim, available_units)
-
-        if units_to_claim > current_claims:
-            # Add more claims
-            for _ in range(units_to_claim - current_claims):
-                item.assigned_to.append(request.person_name)
-        elif units_to_claim < current_claims:
-            # Remove some claims
-            for _ in range(current_claims - units_to_claim):
-                item.assigned_to.remove(request.person_name)
+        set_item_unit_claims_for_person(item, request.person_name, units_to_claim)
     else:
-        # Remove ALL claims for this person on this item
-        while request.person_name in item.assigned_to:
-            item.assigned_to.remove(request.person_name)
+        set_item_unit_claims_for_person(item, request.person_name, 0)
 
     # Save with force_refresh to ensure we have latest data
     save_bill(bill)

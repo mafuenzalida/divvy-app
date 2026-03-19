@@ -791,6 +791,47 @@
             border-color: var(--accent);
         }
 
+        .modal-person.modal-person-static {
+            cursor: default;
+        }
+
+        .modal-assign-stepper {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            margin-left: auto;
+        }
+
+        .modal-assign-stepper span {
+            min-width: 1.5rem;
+            text-align: center;
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+
+        .modal-assign-stepper button {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+            font-size: 1.1rem;
+            line-height: 1;
+            cursor: pointer;
+        }
+
+        .modal-assign-stepper button:hover {
+            border-color: var(--accent);
+        }
+
+        .item-qty-hint {
+            color: var(--text-muted);
+            font-size: 0.7rem;
+            display: block;
+            margin-top: 0.2rem;
+        }
+
         .modal-actions {
             display: flex;
             gap: 0.75rem;
@@ -1160,6 +1201,7 @@
         <div class="modal">
             <h3 class="modal-title">Asignar item</h3>
             <p class="modal-subtitle" id="modal-item-name">Nombre del item</p>
+            <p class="modal-subtitle" id="modal-assign-hint" style="display: none; font-size: 0.8rem;"></p>
             <div class="modal-people" id="modal-people">
                 <!-- People will be rendered here -->
             </div>
@@ -1982,6 +2024,7 @@
                             ${item.quantity > 1 ? `<span style="background: var(--accent); color: white; padding: 0.1rem 0.35rem; border-radius: 4px; font-size: 0.7rem; margin-right: 0.4rem;">${item.quantity}x</span>` : ''}
                             ${item.name}
                             ${item.quantity > 1 ? `<span style="color: var(--text-muted); font-size: 0.75rem; margin-left: 0.3rem;">($${formatNumber(item.price)} c/u)</span>` : ''}
+                            ${item.quantity === 1 && /^[0-9]+[xX×*]/i.test(String(item.name || '').trim()) ? '<span class="item-qty-hint">Tip: el nombre parece traer cantidad — sube la cantidad del ítem para que cada persona elija cuántas tomó.</span>' : ''}
                         </div>
                         <div class="item-assignees">
                             ${item.assigned_to.map((person, i) => 
@@ -2148,21 +2191,46 @@
             const item = currentBill.items.find(i => i.id === itemId);
             
             document.getElementById('modal-item-name').textContent = item.name;
+            const hintEl = document.getElementById('modal-assign-hint');
+            if (item.quantity > 1) {
+                hintEl.style.display = 'block';
+                hintEl.textContent = `Hasta ${item.quantity} unidades ($${formatNumber(item.price)} c/u). Usa − / + por persona.`;
+            } else {
+                hintEl.style.display = 'none';
+            }
             
             const modalPeople = document.getElementById('modal-people');
             
             if (currentBill.people.length === 0) {
                 modalPeople.innerHTML = '<p style="color: var(--text-muted); text-align: center;">Primero agrega personas</p>';
+            } else if (item.quantity > 1) {
+                modalPeople.innerHTML = currentBill.people.map((person, index) => {
+                    const count = item.assigned_to.filter(p => p === person).length;
+                    const pJs = JSON.stringify(person);
+                    return `
+                    <div class="modal-person modal-person-static ${count > 0 ? 'selected' : ''}">
+                        <div class="modal-person-check">${count > 0 ? '✓' : ''}</div>
+                        <div class="person-avatar avatar-${(index % 6) + 1}">${person.charAt(0)}</div>
+                        <span>${person}</span>
+                        <div class="modal-assign-stepper">
+                            <button type="button" aria-label="Quitar una" onclick='adjustHostAssignUnits(${pJs}, ${Math.max(0, count - 1)})'>−</button>
+                            <span>${count}</span>
+                            <button type="button" aria-label="Agregar una" onclick='adjustHostAssignUnits(${pJs}, ${count + 1})'>+</button>
+                        </div>
+                    </div>`;
+                }).join('');
             } else {
-                modalPeople.innerHTML = currentBill.people.map((person, index) => `
-                    <div class="modal-person ${item.assigned_to.includes(person) ? 'selected' : ''}" onclick="toggleAssignment('${person}')">
+                modalPeople.innerHTML = currentBill.people.map((person, index) => {
+                    const pJs = JSON.stringify(person);
+                    return `
+                    <div class="modal-person ${item.assigned_to.includes(person) ? 'selected' : ''}" onclick='toggleAssignment(${pJs})'>
                         <div class="modal-person-check">
                             ${item.assigned_to.includes(person) ? '✓' : ''}
                         </div>
                         <div class="person-avatar avatar-${(index % 6) + 1}">${person.charAt(0)}</div>
                         <span>${person}</span>
-                    </div>
-                `).join('');
+                    </div>`;
+                }).join('');
             }
 
             document.getElementById('assign-modal').classList.add('active');
@@ -2190,6 +2258,30 @@
                 saveState();
                 openAssignModal(selectedItemId); // Refresh modal
 
+            } catch (error) {
+                showToast('Error al asignar', 'error');
+            }
+        }
+
+        async function adjustHostAssignUnits(personName, targetUnits) {
+            if (!currentBill || !selectedItemId || currentBill.locked) return;
+            const u = Math.max(0, parseInt(targetUnits, 10) || 0);
+            try {
+                const response = await fetch('/api/assign-item', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        bill_id: currentBill.id,
+                        item_id: selectedItemId,
+                        person_name: personName,
+                        units: u
+                    })
+                });
+
+                currentBill = await response.json();
+                renderItems();
+                saveState();
+                openAssignModal(selectedItemId);
             } catch (error) {
                 showToast('Error al asignar', 'error');
             }
@@ -2337,10 +2429,30 @@
             const personName = e.dataTransfer.getData('text/plain');
             if (!personName || !currentBill || currentBill.locked) return;
             
-            // Check if already assigned
             const item = currentBill.items.find(i => i.id === itemId);
             if (item && item.assigned_to.includes(personName)) {
-                return; // Already assigned
+                if (item.quantity > 1 && item.assigned_to.length < item.quantity) {
+                    const current = item.assigned_to.filter(p => p === personName).length;
+                    try {
+                        const response = await fetch('/api/assign-item', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                bill_id: currentBill.id,
+                                item_id: itemId,
+                                person_name: personName,
+                                units: current + 1
+                            })
+                        });
+                        currentBill = await response.json();
+                        saveState();
+                        renderItems();
+                        showToast(`${personName}: +1 unidad`, 'success');
+                    } catch (error) {
+                        showToast('Error al asignar', 'error');
+                    }
+                }
+                return;
             }
             
             try {
