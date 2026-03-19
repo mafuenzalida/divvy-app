@@ -389,6 +389,10 @@
             font-size: 0.7rem;
         }
 
+        .item-checkbox.checked.has-fraction::after {
+            content: none;
+        }
+
         .item-checkbox.disabled {
             opacity: 0.5;
             cursor: not-allowed;
@@ -417,12 +421,189 @@
         }
 
         .item-assignees {
-            font-size: 0.7rem;
+            font-size: 0.68rem;
             color: var(--text-muted);
-            margin-top: 0.1rem;
+            margin-top: 0.15rem;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            opacity: 0.85;
+        }
+
+        .item-assignees:empty {
+            display: none;
+        }
+
+        /* Share modal — less visual noise */
+        .share-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.72);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+
+        .share-panel {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 1.15rem 1.25rem;
+            max-width: 340px;
+            width: 100%;
+            border: 1px solid var(--border);
+            max-height: min(90vh, 560px);
+            overflow-y: auto;
+        }
+
+        .share-panel h3 {
+            font-size: 1.05rem;
+            margin-bottom: 0.35rem;
+        }
+
+        .share-item-title {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .share-hint {
+            color: var(--text-muted);
+            font-size: 0.78rem;
+            line-height: 1.35;
+            margin-bottom: 0.85rem;
+        }
+
+        .share-quick-wrap {
+            margin-bottom: 0.75rem;
+        }
+
+        .share-quick-label {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            margin-bottom: 0.35rem;
+            text-transform: uppercase;
+            letter-spacing: 0.02em;
+        }
+
+        .share-quick-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.4rem;
+        }
+
+        .share-preset-btn {
+            padding: 0.45rem 0.65rem;
+            border-radius: 10px;
+            border: 2px solid var(--border);
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+            font-size: 0.82rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: border-color 0.15s, background 0.15s;
+        }
+
+        .share-preset-btn:hover {
+            border-color: var(--accent);
+        }
+
+        .share-preset-btn.active {
+            border-color: var(--accent);
+            background: var(--accent);
+            color: white;
+        }
+
+        .share-advanced {
+            margin-top: 0.5rem;
+            border-top: 1px solid var(--border);
+            padding-top: 0.65rem;
+        }
+
+        .share-advanced summary {
+            cursor: pointer;
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            list-style: none;
+            user-select: none;
+        }
+
+        .share-advanced summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .share-advanced summary::before {
+            content: '▸ ';
+            display: inline-block;
+            transition: transform 0.15s;
+        }
+
+        .share-advanced[open] summary::before {
+            transform: rotate(90deg);
+        }
+
+        .share-field {
+            margin-top: 0.65rem;
+        }
+
+        .share-field label {
+            display: block;
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            margin-bottom: 0.25rem;
+        }
+
+        .share-field-row {
+            display: flex;
+            gap: 0.4rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .share-input {
+            flex: 1;
+            min-width: 0;
+            padding: 0.45rem 0.55rem;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--bg-elevated);
+            color: inherit;
+            font-size: 0.9rem;
+        }
+
+        .share-ok {
+            padding: 0.45rem 0.85rem;
+            border-radius: 8px;
+            border: none;
+            background: var(--accent);
+            color: white;
+            font-weight: 600;
+            font-size: 0.8rem;
+            cursor: pointer;
+        }
+
+        .share-cancel {
+            margin-top: 0.85rem;
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.82rem;
+            width: 100%;
+            padding: 0.35rem;
+        }
+
+        .share-help details {
+            margin-top: 0.5rem;
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+
+        .share-help summary {
+            cursor: pointer;
+            color: var(--text-secondary);
         }
 
         .item-price {
@@ -748,8 +929,8 @@
                 <!-- Items -->
                 <div class="card">
                     <div class="card-header">
-                        🧾 Selecciona lo que consumiste
-                        <span id="items-count" style="font-size: 0.75rem; color: var(--text-muted);"></span>
+                        <span>Tus ítems</span>
+                        <span id="items-count" style="font-size: 0.72rem; color: var(--text-muted); font-weight: 500;"></span>
                     </div>
                     <div class="card-body">
                         <div class="items-container" id="items-list"></div>
@@ -819,30 +1000,34 @@
         </div>
     </div>
 
-    <!-- Share modal: fractions / decimals for your part of a line (esp. quantity 1) -->
-    <div id="share-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center;">
-        <div style="background: var(--bg-card); border-radius: 16px; padding: 1.5rem; max-width: 340px; width: 90%; border: 1px solid var(--border);">
-            <h3 style="margin-bottom: 0.5rem; font-size: 1.1rem;">Tu parte</h3>
-            <p id="share-item-name" style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.75rem;"></p>
-            <p id="share-max-hint" style="color: var(--text-muted); font-size: 0.75rem; margin-bottom: 1rem;"></p>
-            <div id="share-quick-buttons" style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;"></div>
-            <div style="margin-bottom: 0.75rem;">
-                <label style="display:block; font-size: 0.8rem; margin-bottom: 0.25rem;">Unidades exactas (ej. 2.5 o 0.2 si el ítem es 1 u.)</label>
-                <div style="display: flex; gap: 0.5rem;">
-                    <input type="number" id="share-decimal" step="0.01" min="0" style="flex:1; padding: 0.5rem; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-elevated); color: inherit;" />
-                    <button type="button" onclick="applyShareDecimal()" style="padding: 0.5rem 1rem; border-radius: 8px; border: none; background: var(--accent); color: white; font-weight: 600; cursor: pointer;">OK</button>
+    <!-- Share modal: quick presets + optional advanced -->
+    <div id="share-modal" class="share-overlay">
+        <div class="share-panel" onclick="event.stopPropagation()">
+            <h3>Tu parte</h3>
+            <p id="share-item-name" class="share-item-title"></p>
+            <p id="share-max-hint" class="share-hint"></p>
+            <div id="share-quick-buttons"></div>
+            <div class="share-help" id="share-help-block"></div>
+            <details class="share-advanced" id="share-advanced">
+                <summary>Otro valor (decimal o fracción)</summary>
+                <div class="share-field">
+                    <label for="share-decimal">Cantidad</label>
+                    <div class="share-field-row">
+                        <input type="number" id="share-decimal" class="share-input" step="0.01" min="0" placeholder="ej. 1 o 0.5" />
+                        <button type="button" class="share-ok" onclick="applyShareDecimal()">Aplicar</button>
+                    </div>
                 </div>
-            </div>
-            <div style="margin-bottom: 1rem;">
-                <label style="display:block; font-size: 0.8rem; margin-bottom: 0.25rem;">Fracción de esta línea (a/b del total de unidades del ítem)</label>
-                <div style="display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap;">
-                    <input type="number" id="share-num" step="1" min="0" style="width: 56px; padding: 0.5rem; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-elevated); color: inherit;" />
-                    <span>/</span>
-                    <input type="number" id="share-den" step="1" min="1" style="width: 56px; padding: 0.5rem; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-elevated); color: inherit;" />
-                    <button type="button" onclick="applyShareFraction()" style="padding: 0.5rem 1rem; border-radius: 8px; border: none; background: var(--accent); color: white; font-weight: 600; cursor: pointer;">OK</button>
+                <div class="share-field">
+                    <label>Fracción del ítem (numerador / denominador)</label>
+                    <div class="share-field-row">
+                        <input type="number" id="share-num" class="share-input" style="width: 64px; flex: none;" step="1" min="0" placeholder="a" />
+                        <span style="color: var(--text-muted);">/</span>
+                        <input type="number" id="share-den" class="share-input" style="width: 64px; flex: none;" step="1" min="1" placeholder="b" />
+                        <button type="button" class="share-ok" onclick="applyShareFraction()">Aplicar</button>
+                    </div>
                 </div>
-            </div>
-            <button onclick="closeShareModal()" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.85rem; width:100%;">Cancelar</button>
+            </details>
+            <button type="button" class="share-cancel" onclick="closeShareModal()">Cancelar</button>
         </div>
     </div>
 
@@ -881,6 +1066,18 @@
             return String(t).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
         }
 
+        /** One short line for the list row; empty if nobody claimed yet */
+        function assigneesListSubtitle(item, meName) {
+            const claims = itemClaims(item);
+            const names = Object.entries(claims)
+                .filter(([_, u]) => Number(u) > 1e-12)
+                .map(([n]) => n);
+            if (names.length === 0) return '';
+            if (names.length === 1) return names[0] === meName ? 'Tú' : names[0];
+            if (names.length === 2) return `${names[0]} · ${names[1]}`;
+            return `${names[0]} · ${names[1]} +${names.length - 2}`;
+        }
+
         function itemClaimWeightSum(item) {
             return Object.values(itemClaims(item)).reduce((a, b) => a + (Number(b) || 0), 0);
         }
@@ -897,8 +1094,12 @@
         }
 
         document.addEventListener('DOMContentLoaded', async () => {
+            document.getElementById('share-modal')?.addEventListener('click', (e) => {
+                if (e.target.id === 'share-modal') closeShareModal();
+            });
+
             await loadBill();
-            
+
             const savedIdentity = localStorage.getItem(`divvy_identity_${billId}`);
             if (savedIdentity && billData?.bill?.people?.includes(savedIdentity)) {
                 selectIdentity(savedIdentity);
@@ -1057,43 +1258,36 @@
             
             // Update items count (lines where you have a positive claim)
             const myItems = items.filter(i => personClaimUnits(i, currentIdentity) > 1e-12).length;
-            const lockIndicator = !canEdit ? ' 🔒' : '';
-            document.getElementById('items-count').textContent = `${myItems}/${items.length} seleccionados${lockIndicator}`;
+            const lockIndicator = !canEdit ? ' · Bloqueado' : '';
+            document.getElementById('items-count').textContent =
+                items.length ? `${myItems} de ${items.length}${lockIndicator}` : '';
             
             container.innerHTML = items.map(item => {
                 const myClaims = personClaimUnits(item, currentIdentity);
                 const isAssigned = myClaims > 1e-12;
                 
-                const assigneesText = Object.keys(itemClaims(item)).filter(n => Number(itemClaims(item)[n]) > 1e-12).length > 0
-                    ? Object.entries(itemClaims(item))
-                        .filter(([_, u]) => Number(u) > 1e-12)
-                        .map(([name, u]) => `${name} (${formatClaimUnits(u)})`)
-                        .join(', ')
-                    : 'Sin asignar';
-                
-                const claimedIndicator = isAssigned
-                    ? `<span style="color: var(--success); font-size: 0.7rem; margin-left: 4px;">${formatClaimUnits(myClaims)}/${item.quantity} uds</span>` 
-                    : '';
-                
+                const sub = assigneesListSubtitle(item, currentIdentity);
                 const clickAction = canEdit ? `showShareModal('${item.id}')` : '';
-                
-                const badgeLabel = isAssigned && (myClaims > 1 + 1e-6 || Math.abs(myClaims - Math.round(myClaims)) > 1e-5)
-                    ? `<span style="font-size: 0.6rem;">${formatClaimUnits(myClaims)}</span>` 
-                    : (isAssigned ? `<span style="font-size: 0.6rem;">✓</span>` : '');
+                const showFractionInBox = isAssigned && (myClaims > 1 + 1e-6 || Math.abs(myClaims - Math.round(myClaims)) > 1e-5);
+                const badgeLabel = !isAssigned
+                    ? ''
+                    : (showFractionInBox
+                        ? `<span style="font-size: 0.62rem; font-weight: 600;">${formatClaimUnits(myClaims)}</span>`
+                        : '');
                 
                 return `
                     <div class="item-row">
-                        <div class="item-checkbox ${isAssigned ? 'checked' : ''} ${!canEdit ? 'disabled' : ''}" 
-                             onclick="${clickAction}">
+                        <div class="item-checkbox ${isAssigned ? 'checked' : ''}${showFractionInBox ? ' has-fraction' : ''} ${!canEdit ? 'disabled' : ''}" 
+                             onclick="${clickAction}"
+                             title="${canEdit ? 'Toca para ajustar tu parte' : ''}">
                              ${badgeLabel}
                         </div>
                         <div class="item-info">
                             <div class="item-name">
                                 ${item.quantity > 1 ? `<span class="item-qty">${item.quantity}x</span>` : ''}
                                 ${escapeHtml(item.name)}
-                                ${claimedIndicator}
                             </div>
-                            <div class="item-assignees">${escapeHtml(assigneesText)}</div>
+                            ${sub ? `<div class="item-assignees">${escapeHtml(sub)}</div>` : ''}
                         </div>
                         <div class="item-price">$${formatNumber(item.price * item.quantity)}</div>
                     </div>
@@ -1114,45 +1308,59 @@
             
             document.getElementById('share-item-name').textContent =
                 (lineQty > 1 ? `${lineQty}x ` : '') + item.name;
-            document.getElementById('share-max-hint').innerHTML = singleLine
-                ? `Tu parte (peso): <strong>${formatClaimUnits(my)}</strong> · Varios pueden poner <strong>1</strong>: si la suma de pesos &gt; 1, la línea se divide en proporción (ej. dos “1” → 50/50).<br>` +
-                  `<span style="opacity:0.9">Si solo tú reclamas y tu peso ≤ 1, pagas ese <em>fracción</em> del ítem. Tu total no depende de que otros reclamen primero.</span>`
-                : `Máximo ahora: <strong>${formatClaimUnits(pendingShareMax)}</strong> u. de ${lineQty} · Tu parte: <strong>${formatClaimUnits(my)}</strong><br>` +
-                  `<span style="opacity:0.9">Tu total (ítems + IVA/propina) usa solo <em>tu</em> parte de cada línea; no hace falta que otros reclamen para verlo.</span>`;
+            document.getElementById('share-max-hint').textContent = singleLine
+                ? `Ahora: ${formatClaimUnits(my)} · Varios pueden usar 1; si suman más de 1, se reparte en proporción.`
+                : `Tu parte: ${formatClaimUnits(my)} · Hasta ${formatClaimUnits(pendingShareMax)} de ${lineQty} u. disponibles.`;
+
+            const helpEl = document.getElementById('share-help-block');
+            helpEl.innerHTML = singleLine
+                ? `<details><summary>¿Cómo funciona el reparto?</summary>
+                    Si solo tú reclamas y tu cantidad es ≤ 1, pagas esa fracción del ítem. Con varios “1”, el total de la línea se divide según esos pesos (dos “1” → mitad y mitad).</details>`
+                : `<details><summary>Más detalle</summary>
+                    Tu total usa solo tu parte de cada línea (más propina e impuestos proporcionales). No necesitas que otros reclamen primero para ver tu monto.</details>`;
+
+            const adv = document.getElementById('share-advanced');
+            if (adv) adv.open = false;
+
             document.getElementById('share-decimal').value = my > 1e-12 ? formatClaimUnits(my) : '';
             document.getElementById('share-num').value = '';
             document.getElementById('share-den').value = '5';
-            
-            const btnStyle = (active) => `
-                padding: 0.5rem 0.75rem;
-                border-radius: 10px;
-                border: 2px solid ${active ? 'var(--accent)' : 'var(--border)'};
-                background: ${active ? 'var(--accent)' : 'var(--bg-elevated)'};
-                color: ${active ? 'white' : 'var(--text-primary)'};
-                font-size: 0.85rem;
-                font-weight: 600;
-                cursor: pointer;
-            `;
+
+            const cls = (active) => `share-preset-btn${active ? ' active' : ''}`;
             const max = pendingShareMax;
             const TQ = lineQty;
-            const intCap = Math.min(Math.floor(max + 1e-9), 24);
-            let intHtml2 = `<div style="width:100%;font-size:0.72rem;color:var(--text-muted);margin-bottom:0.35rem;">Enteras</div><div style="display:flex;flex-wrap:wrap;gap:0.45rem;margin-bottom:0.75rem;">`;
-            for (let i = 0; i <= intCap; i++) {
-                const sel = Math.abs(my - i) < 1e-5 || (i === 0 && my <= 1e-12);
-                const lab = i === 0 ? '0' : String(i);
-                intHtml2 += `<button type="button" onclick="applyShareUnits(${i})" style="${btnStyle(sel)}">${lab}</button>`;
-            }
-            intHtml2 += '</div>';
 
-            const fracPresets = [
+            let intHtml2 = '';
+            if (!singleLine) {
+                const intCap = Math.min(Math.floor(max + 1e-9), 10);
+                intHtml2 = `<div class="share-quick-wrap"><div class="share-quick-label">Unidades</div><div class="share-quick-row">`;
+                for (let i = 0; i <= intCap; i++) {
+                    const sel = Math.abs(my - i) < 1e-5 || (i === 0 && my <= 1e-12);
+                    const lab = i === 0 ? '0' : String(i);
+                    intHtml2 += `<button type="button" class="${cls(sel)}" onclick="applyShareUnits(${i})">${lab}</button>`;
+                }
+                intHtml2 += '</div></div>';
+            } else {
+                intHtml2 = `<div class="share-quick-wrap"><div class="share-quick-label">Rápido</div><div class="share-quick-row">`;
+                [0, 1].forEach((i) => {
+                    const sel = Math.abs(my - i) < 1e-5 || (i === 0 && my <= 1e-12);
+                    intHtml2 += `<button type="button" class="${cls(sel)}" onclick="applyShareUnits(${i})">${i === 0 ? 'Nada' : 'Todo (1)'}</button>`;
+                });
+                intHtml2 += '</div></div>';
+            }
+
+            const fracPresetsAll = [
                 { parts: 0, label: 'Ninguno' },
                 { parts: 1 / 5, label: '1/5' },
                 { parts: 1 / 4, label: '1/4' },
                 { parts: 1 / 3, label: '1/3' },
                 { parts: 1 / 2, label: '1/2' },
-                { parts: 1, label: TQ <= 1 ? 'Peso 1' : 'Todo disponible' },
+                { parts: 1, label: TQ <= 1 ? 'Todo' : 'Max' },
             ];
-            let fracHtml = `<div style="width:100%;font-size:0.72rem;color:var(--text-muted);margin-bottom:0.35rem;">Parte del ítem (fracción × ${TQ} u.)</div><div style="display:flex;flex-wrap:wrap;gap:0.45rem;">`;
+            const fracPresets = singleLine
+                ? fracPresetsAll.filter(p => p.parts > 0 && p.parts < 1)
+                : fracPresetsAll;
+            let fracHtml = `<div class="share-quick-wrap"><div class="share-quick-label">${singleLine ? 'Mitades y tercios' : `Fracción (× ${TQ} u.)`}</div><div class="share-quick-row">`;
             fracPresets.forEach(({ parts, label }) => {
                 let targetUnits;
                 if (parts === 0) targetUnits = 0;
@@ -1162,9 +1370,10 @@
                 const sel = parts === 0
                     ? (my <= 1e-12)
                     : (Math.abs(my - targetUnits) < 1e-4 || (parts === 1 && TQ > 1 && Math.abs(my - max) < 1e-4) || (parts === 1 && TQ <= 1 && Math.abs(my - 1) < 1e-4));
-                fracHtml += `<button type="button" onclick="applyShareUnits(${targetUnits})" style="${btnStyle(sel)}">${label}</button>`;
+                fracHtml += `<button type="button" class="${cls(sel)}" onclick="applyShareUnits(${targetUnits})">${label}</button>`;
             });
-            fracHtml += '</div>';
+            fracHtml += '</div></div>';
+
             document.getElementById('share-quick-buttons').innerHTML = intHtml2 + fracHtml;
             document.getElementById('share-modal').style.display = 'flex';
         }
@@ -1175,6 +1384,7 @@
             pendingShareMax = 0;
             pendingShareLineQty = 1;
         }
+
 
         async function applyShareDecimal() {
             const v = parseFloat(document.getElementById('share-decimal').value);
