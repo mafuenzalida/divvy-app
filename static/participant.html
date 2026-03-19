@@ -827,14 +827,14 @@
             <p id="share-max-hint" style="color: var(--text-muted); font-size: 0.75rem; margin-bottom: 1rem;"></p>
             <div id="share-quick-buttons" style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;"></div>
             <div style="margin-bottom: 0.75rem;">
-                <label style="display:block; font-size: 0.8rem; margin-bottom: 0.25rem;">Decimal (ej. 0.2 = 20% del ítem)</label>
+                <label style="display:block; font-size: 0.8rem; margin-bottom: 0.25rem;">Unidades exactas (ej. 2.5 o 0.2 si el ítem es 1 u.)</label>
                 <div style="display: flex; gap: 0.5rem;">
                     <input type="number" id="share-decimal" step="0.01" min="0" style="flex:1; padding: 0.5rem; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-elevated); color: inherit;" />
                     <button type="button" onclick="applyShareDecimal()" style="padding: 0.5rem 1rem; border-radius: 8px; border: none; background: var(--accent); color: white; font-weight: 600; cursor: pointer;">OK</button>
                 </div>
             </div>
             <div style="margin-bottom: 1rem;">
-                <label style="display:block; font-size: 0.8rem; margin-bottom: 0.25rem;">Fracción (pagas a/b del ítem)</label>
+                <label style="display:block; font-size: 0.8rem; margin-bottom: 0.25rem;">Fracción de esta línea (a/b del total de unidades del ítem)</label>
                 <div style="display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap;">
                     <input type="number" id="share-num" step="1" min="0" style="width: 56px; padding: 0.5rem; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-elevated); color: inherit;" />
                     <span>/</span>
@@ -854,6 +854,7 @@
         let currentIdentity = null;
         let pendingShareItemId = null;
         let pendingShareMax = 0;
+        let pendingShareLineQty = 1;
 
         function itemClaims(item) {
             const c = item.claims;
@@ -1055,7 +1056,6 @@
             container.innerHTML = items.map(item => {
                 const myClaims = personClaimUnits(item, currentIdentity);
                 const isAssigned = myClaims > 1e-12;
-                const totalClaimed = totalClaimedUnits(item);
                 
                 const assigneesText = Object.keys(itemClaims(item)).filter(n => Number(itemClaims(item)[n]) > 1e-12).length > 0
                     ? Object.entries(itemClaims(item))
@@ -1068,11 +1068,7 @@
                     ? `<span style="color: var(--success); font-size: 0.7rem; margin-left: 4px;">${formatClaimUnits(myClaims)}/${item.quantity} uds</span>` 
                     : '';
                 
-                const clickAction = canEdit 
-                    ? (item.quantity > 1 
-                        ? `showQtyModal('${item.id}', '${escapeHtml(item.name)}', ${item.quantity}, ${myClaims}, ${totalClaimed})`
-                        : `showShareModal('${item.id}')`)
-                    : '';
+                const clickAction = canEdit ? `showShareModal('${item.id}')` : '';
                 
                 const badgeLabel = isAssigned && (myClaims > 1 + 1e-6 || Math.abs(myClaims - Math.round(myClaims)) > 1e-5)
                     ? `<span style="font-size: 0.6rem;">${formatClaimUnits(myClaims)}</span>` 
@@ -1098,74 +1094,21 @@
             }).join('');
         }
 
-        // For multi-quantity items: show modal to select how many
-        let pendingItemId = null;
-        let pendingItemQty = null;
-        
-        function showQtyModal(itemId, itemName, totalQty, myClaims, totalClaimed) {
-            pendingItemId = itemId;
-            pendingItemQty = totalQty;
-            
-            const modal = document.getElementById('qty-modal');
-            const itemNameEl = document.getElementById('qty-item-name');
-            const buttonsEl = document.getElementById('qty-buttons');
-            
-            itemNameEl.textContent = `${totalQty}x ${itemName}`;
-            
-            const my = Number(myClaims) || 0;
-            const tot = Number(totalClaimed) || 0;
-            const otherClaims = tot - my;
-            const maxCanClaim = Math.max(0, Math.floor(totalQty - otherClaims + 1e-9));
-            
-            // Generate buttons: 0 (none), 1, 2, ... up to maxCanClaim
-            let buttonsHtml = '';
-            const myInt = Math.min(maxCanClaim, Math.round(my));
-            for (let i = 0; i <= maxCanClaim; i++) {
-                const isSelected = i === myInt;
-                const label = i === 0 ? 'Ninguno' : i.toString();
-                buttonsHtml += `
-                    <button onclick="selectQty(${i})" style="
-                        padding: 0.75rem 1.25rem;
-                        border-radius: 10px;
-                        border: 2px solid ${isSelected ? 'var(--accent)' : 'var(--border)'};
-                        background: ${isSelected ? 'var(--accent)' : 'var(--bg-elevated)'};
-                        color: ${isSelected ? 'white' : 'var(--text-primary)'};
-                        font-size: 1rem;
-                        font-weight: 600;
-                        cursor: pointer;
-                        min-width: 50px;
-                    ">${label}</button>
-                `;
-            }
-            
-            buttonsEl.innerHTML = buttonsHtml;
-            modal.style.display = 'flex';
-        }
-        
-        function closeQtyModal() {
-            document.getElementById('qty-modal').style.display = 'none';
-            pendingItemId = null;
-            pendingItemQty = null;
-        }
-        
-        async function selectQty(units) {
-            if (!pendingItemId) return;
-            closeQtyModal();
-            await toggleItem(pendingItemId, units > 0, Number(units));
-        }
-
         function showShareModal(itemId) {
             const item = billData.bill.items.find(i => i.id === itemId);
             if (!item) return;
             pendingShareItemId = itemId;
             const my = personClaimUnits(item, currentIdentity);
             const otherSum = totalClaimedUnits(item) - my;
-            pendingShareMax = Math.max(0, Number(item.quantity) - otherSum);
+            const lineQty = Number(item.quantity) || 1;
+            pendingShareLineQty = lineQty;
+            pendingShareMax = Math.max(0, lineQty - otherSum);
             
             document.getElementById('share-item-name').textContent =
-                (item.quantity > 1 ? `${item.quantity}x ` : '') + item.name;
-            document.getElementById('share-max-hint').textContent =
-                `Máximo a reclamar ahora: ${formatClaimUnits(pendingShareMax)} de ${item.quantity} u. · Tu parte actual: ${formatClaimUnits(my)}`;
+                (lineQty > 1 ? `${lineQty}x ` : '') + item.name;
+            document.getElementById('share-max-hint').innerHTML =
+                `Máximo ahora: <strong>${formatClaimUnits(pendingShareMax)}</strong> u. de ${lineQty} · Tu parte: <strong>${formatClaimUnits(my)}</strong><br>` +
+                `<span style="opacity:0.9">Tu total (ítems + IVA/propina) usa solo <em>tu</em> parte de cada línea; no hace falta que otros reclamen para verlo.</span>`;
             document.getElementById('share-decimal').value = my > 1e-12 ? formatClaimUnits(my) : '';
             document.getElementById('share-num').value = '';
             document.getElementById('share-den').value = '5';
@@ -1180,21 +1123,39 @@
                 font-weight: 600;
                 cursor: pointer;
             `;
-            const presets = [
-                { v: 0, label: 'Ninguno' },
-                { v: 1 / 5, label: '1/5' },
-                { v: 1 / 4, label: '1/4' },
-                { v: 1 / 3, label: '1/3' },
-                { v: 0.5, label: '1/2' },
-                { v: 1, label: 'Todo' },
+            const max = pendingShareMax;
+            const TQ = lineQty;
+            const intCap = Math.min(Math.floor(max + 1e-9), 24);
+            let intHtml2 = `<div style="width:100%;font-size:0.72rem;color:var(--text-muted);margin-bottom:0.35rem;">Enteras</div><div style="display:flex;flex-wrap:wrap;gap:0.45rem;margin-bottom:0.75rem;">`;
+            for (let i = 0; i <= intCap; i++) {
+                const sel = Math.abs(my - i) < 1e-5 || (i === 0 && my <= 1e-12);
+                const lab = i === 0 ? '0' : String(i);
+                intHtml2 += `<button type="button" onclick="applyShareUnits(${i})" style="${btnStyle(sel)}">${lab}</button>`;
+            }
+            intHtml2 += '</div>';
+
+            const fracPresets = [
+                { parts: 0, label: 'Ninguno' },
+                { parts: 1 / 5, label: '1/5' },
+                { parts: 1 / 4, label: '1/4' },
+                { parts: 1 / 3, label: '1/3' },
+                { parts: 1 / 2, label: '1/2' },
+                { parts: 1, label: 'Todo disponible' },
             ];
-            let qh = '';
-            presets.forEach(({ v, label }) => {
-                if (v > pendingShareMax + 1e-9 && v > 1e-12) return;
-                const sel = Math.abs(my - v) < 1e-5 || (v === 0 && my <= 1e-12);
-                qh += `<button type="button" onclick="applySharePreset(${v})" style="${btnStyle(sel)}">${label}</button>`;
+            let fracHtml = `<div style="width:100%;font-size:0.72rem;color:var(--text-muted);margin-bottom:0.35rem;">Parte del ítem (fracción × ${TQ} u.)</div><div style="display:flex;flex-wrap:wrap;gap:0.45rem;">`;
+            fracPresets.forEach(({ parts, label }) => {
+                let targetUnits;
+                if (parts === 0) targetUnits = 0;
+                else if (parts === 1) targetUnits = max;
+                else targetUnits = Math.min(TQ * parts, max);
+                if (parts > 0 && max < 1e-12) return;
+                const sel = parts === 0
+                    ? (my <= 1e-12)
+                    : (Math.abs(my - targetUnits) < 1e-4 || (parts === 1 && Math.abs(my - max) < 1e-4));
+                fracHtml += `<button type="button" onclick="applyShareUnits(${targetUnits})" style="${btnStyle(sel)}">${label}</button>`;
             });
-            document.getElementById('share-quick-buttons').innerHTML = qh;
+            fracHtml += '</div>';
+            document.getElementById('share-quick-buttons').innerHTML = intHtml2 + fracHtml;
             document.getElementById('share-modal').style.display = 'flex';
         }
 
@@ -1202,10 +1163,7 @@
             document.getElementById('share-modal').style.display = 'none';
             pendingShareItemId = null;
             pendingShareMax = 0;
-        }
-
-        async function applySharePreset(v) {
-            await applyShareUnits(Number(v));
+            pendingShareLineQty = 1;
         }
 
         async function applyShareDecimal() {
@@ -1228,7 +1186,8 @@
                 showToast('Numerador inválido', 'error');
                 return;
             }
-            await applyShareUnits(a / b);
+            const units = pendingShareLineQty * (a / b);
+            await applyShareUnits(units);
         }
 
         async function applyShareUnits(u) {
