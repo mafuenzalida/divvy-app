@@ -162,3 +162,4 @@ Edit `FINTOC_USERNAME` in `main.py` to your Fintoc username for payment links.
 ## License
 
 MIT
+# divvy
