@@ -11,13 +11,14 @@ A beautiful bill-splitting app that scans receipts, lets you assign items to peo
 - 🔗 **Fintoc Payment Links** - Generate instant payment links for each person
 - 📱 **Participant View** - Share a link so friends can self-assign items
 - 💾 **Persistent Storage** - Bills survive restarts (Turso DB or local file)
+- **Host and participant links** - Each bill has a secret host edit URL (`/edit/...`) and a participant URL (`/b/...`); optional email magic-link sign-in lists bills you have claimed
 
 ## Quick Start (Local Development)
 
 ### 1. Setup
 
 ```bash
-cd CobroF
+cd divvy-app
 
 # Create virtual environment
 python3 -m venv venv
@@ -78,7 +79,7 @@ turso db tokens create divvy-bills
 ### Step 2: Deploy to Fly.io
 
 ```bash
-cd CobroF
+cd divvy-app
 
 # Login to Fly.io
 fly auth login
@@ -111,33 +112,34 @@ Your app is now live at `https://divvy-bills.fly.dev` (or your chosen name)!
 2. **Add people** - Enter names of everyone splitting the bill
 3. **Assign items** - Drag people to items or click 👤 to assign
 4. **Set extras** - Update tax/tip percentages if needed
-5. **Share link** - Click "Copiar Link para Participantes" to share with friends
+5. **Share link** - Copy the participant link (`/b/...`) for friends; keep your host edit link (`/edit/...`) private
 6. **Generate payment links** - Click "Generar Links de Pago" when ready
 
-## API Endpoints
+## API Endpoints (selected)
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/status` | GET | API status and config |
-| `/api/create-bill` | POST | Create empty bill |
+| `/api/me` | GET | Current session (optional account) |
+| `/api/me/bills` | GET | Bills owned by signed-in user |
+| `/api/auth/request-magic-link` | POST | Email magic link (JSON `{ "email" }`) |
+| `/api/auth/callback` | GET | Completes magic link sign-in |
+| `/api/create-bill` | POST | Create empty bill (returns `host_token`, `participant_token`, URLs) |
 | `/api/scan-bill` | POST | Upload and scan a receipt |
-| `/api/bill/{id}` | GET | Get bill details |
-| `/api/add-person` | POST | Add a person |
-| `/api/remove-person` | POST | Remove a person |
-| `/api/assign-item` | POST | Assign/unassign person to item |
-| `/api/update-tip-tax` | POST | Update tip and tax |
-| `/api/add-item` | POST | Manually add an item |
-| `/api/update-title` | POST | Update bill title |
-| `/api/calculate-splits/{id}` | GET | Calculate splits and payment links |
-| `/api/bill/{id}/participant` | GET | Get bill for participant view |
-| `/api/bill/{id}/join` | POST | Join a bill as participant |
-| `/api/bill/{id}/self-assign` | POST | Self-assign items |
+| `/api/bill/{id}` | GET | Get bill (host: `Authorization: Bearer <host_token>` or host cookie) |
+| `/api/p/t/{token}` | GET | Participant bill payload |
+| `/api/p/t/{token}/join` | POST | Join as participant |
+| `/api/p/t/{token}/self-assign` | POST | Self-assign items |
+| `/api/add-person` | POST | Add a person (host) |
+| `/api/calculate-splits/{id}` | GET | Splits (host) |
+
+See route modules under `app/routers/` for the full set.
 
 ## Configuration
 
 ### Fintoc Username
 
-Edit `FINTOC_USERNAME` in `main.py` to your Fintoc username for payment links.
+Set `FINTOC_USERNAME` in `.env`, or per-bill in the UI (stored on the bill).
 
 ### OCR Engines (priority order)
 

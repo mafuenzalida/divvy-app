@@ -1032,8 +1032,8 @@
     </div>
 
     <script>
-        const pathParts = window.location.pathname.split('/');
-        const billId = pathParts[pathParts.length - 1];
+        const pathParts = window.location.pathname.split('/').filter(Boolean);
+        const participantToken = pathParts[0] === 'b' && pathParts[1] ? pathParts[1] : pathParts[pathParts.length - 1];
 
         let billData = null;
         let currentIdentity = null;
@@ -1100,7 +1100,7 @@
 
             await loadBill();
 
-            const savedIdentity = localStorage.getItem(`divvy_identity_${billId}`);
+            const savedIdentity = localStorage.getItem(`divvy_identity_${participantToken}`);
             if (savedIdentity && billData?.bill?.people?.includes(savedIdentity)) {
                 selectIdentity(savedIdentity);
             }
@@ -1108,7 +1108,7 @@
 
         async function loadBill() {
             try {
-                const response = await fetch(`/api/bill/${billId}/participant`);
+                const response = await fetch(`/api/p/t/${participantToken}`);
                 
                 if (!response.ok) {
                     document.getElementById('loading-state').style.display = 'none';
@@ -1196,7 +1196,7 @@
 
         function selectIdentity(name) {
             currentIdentity = name;
-            localStorage.setItem(`divvy_identity_${billId}`, name);
+            localStorage.setItem(`divvy_identity_${participantToken}`, name);
             
             document.getElementById('identity-section').style.display = 'none';
             document.getElementById('bill-view').style.display = 'block';
@@ -1210,7 +1210,7 @@
 
         function changeIdentity() {
             currentIdentity = null;
-            localStorage.removeItem(`divvy_identity_${billId}`);
+            localStorage.removeItem(`divvy_identity_${participantToken}`);
             
             document.getElementById('identity-section').style.display = 'block';
             document.getElementById('bill-view').style.display = 'none';
@@ -1226,10 +1226,10 @@
             if (!name) return;
             
             try {
-                const response = await fetch(`/api/bill/${billId}/join`, {
+                const response = await fetch(`/api/p/t/${participantToken}/join`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ bill_id: billId, person_name: name })
+                    body: JSON.stringify({ person_name: name })
                 });
                 
                 if (!response.ok) {
@@ -1423,11 +1423,10 @@
 
         async function toggleItem(itemId, assign, units = 1) {
             try {
-                const response = await fetch(`/api/bill/${billId}/self-assign`, {
+                const response = await fetch(`/api/p/t/${participantToken}/self-assign`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        bill_id: billId,
                         person_name: currentIdentity,
                         item_id: itemId,
                         assigned: assign,
@@ -1600,11 +1599,10 @@
             const hasPaid = paidBy.includes(currentIdentity);
             
             try {
-                const response = await fetch('/api/mark-paid', {
+                const response = await fetch(`/api/p/t/${participantToken}/mark-paid`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        bill_id: billId,
                         person_name: currentIdentity,
                         paid: !hasPaid
                     })
