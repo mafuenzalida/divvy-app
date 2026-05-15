@@ -46,7 +46,7 @@ async def auth_callback(token: str):
     )
     sess = database.create_session(user["id"])
     exp = datetime.now(timezone.utc) + timedelta(days=14)
-    resp = RedirectResponse(url="/", status_code=302)
+    resp = RedirectResponse(url="/app", status_code=302)
     resp.set_cookie(
         key="divvy_session",
         value=sess,

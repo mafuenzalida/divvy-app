@@ -11,7 +11,7 @@ A beautiful bill-splitting app that scans receipts, lets you assign items to peo
 - 🔗 **Fintoc Payment Links** - Generate instant payment links for each person
 - 📱 **Participant View** - Share a link so friends can self-assign items
 - 💾 **Persistent Storage** - Bills survive restarts (Turso DB or local file)
-- **Host and participant links** - Each bill has a secret host edit URL (`/edit/...`) and a participant URL (`/b/...`); optional email magic-link sign-in lists bills you have claimed
+- **Host and participant links** - Each bill has a secret host edit URL (`/edit/...`, redirects to `/app?bill=...` and sets a host cookie) and a participant URL (`/b/...`); optional email magic-link sign-in lists bills you have claimed
 
 ## Quick Start (Local Development)
 
@@ -44,7 +44,7 @@ cp env.example.txt .env
 uvicorn main:app --reload --port 8000
 ```
 
-Then open http://localhost:8000 in your browser.
+Then open http://localhost:8000 for the landing page. The host dashboard is at http://localhost:8000/app (magic-link sign-in completes there too).
 
 ---
 
@@ -112,7 +112,7 @@ Your app is now live at `https://divvy-bills.fly.dev` (or your chosen name)!
 2. **Add people** - Enter names of everyone splitting the bill
 3. **Assign items** - Drag people to items or click 👤 to assign
 4. **Set extras** - Update tax/tip percentages if needed
-5. **Share link** - Copy the participant link (`/b/...`) for friends; keep your host edit link (`/edit/...`) private
+5. **Share link** - Copy the participant link (`/b/...`) for friends; keep your host edit link (`/edit/...`) private (opens the app at `/app` with that bill)
 6. **Generate payment links** - Click "Generar Links de Pago" when ready
 
 ## API Endpoints (selected)
@@ -136,6 +136,25 @@ Your app is now live at `https://divvy-bills.fly.dev` (or your chosen name)!
 See route modules under `app/routers/` for the full set.
 
 ## Configuration
+
+### Site URLs (local and production)
+
+- **`/`** — Marketing-style landing (static).
+- **`/app`** — Host dashboard (upload, edit bills).
+- **`/login`** — Magic-link sign-in and logout.
+- **`BASE_URL`** — Must be the public origin users open in the browser (for example `https://your-app.fly.dev`). It is embedded in magic-link emails; if it is wrong, the link opens the wrong host or path.
+
+### Email sign-in (Resend)
+
+Magic links are sent with the [Resend](https://resend.com) HTTP API (`POST https://api.resend.com/emails`). There is no other mail backend configured in this repo.
+
+1. Create a Resend account and verify a sending domain (or use their test sender while developing).
+2. Create an API key and set **`MAIL_API_KEY`** in `.env` (and in Fly secrets for production).
+3. Set **`MAIL_FROM`** to an address on your verified domain (Resend shows the exact format they expect).
+4. Set **`BASE_URL`** to the same scheme + host users will use when they click the link (include the port in local dev if you are not on port 80), for example `http://localhost:8000` or `https://divvy-bills.fly.dev`.
+5. Include that origin in **`ALLOWED_ORIGINS`** (comma-separated) so the browser can call the API with cookies.
+
+If `MAIL_API_KEY` or `MAIL_FROM` is missing, `POST /api/auth/request-magic-link` returns **503** with a clear error.
 
 ### Fintoc Username
 
@@ -164,4 +183,3 @@ Set `FINTOC_USERNAME` in `.env`, or per-bill in the UI (stored on the bill).
 ## License
 
 MIT
-# divvy

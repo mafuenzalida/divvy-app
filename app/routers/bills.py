@@ -23,6 +23,7 @@ from app.domain.schemas import (
     UpdateTipTaxRequest,
 )
 from app.services import bill_store
+from app.services.restore_merge import merge_restore_bill_from_existing
 from app.services.money import (
     compute_person_totals_minor,
     from_minor,
@@ -84,13 +85,7 @@ async def restore_bill(request: Request, payload: RestoreBillRequest):
     existing = bill_store.fetch_bill(bill.id, force_refresh=True)
     if existing:
         verify_host_access(request, existing)
-        bill.people = existing.people if existing.people else bill.people
-        db_by_id = {i.id: i for i in existing.items}
-        for client_item in bill.items:
-            if client_item.id in db_by_id:
-                db_item = db_by_id[client_item.id]
-                client_item.claims = dict(db_item.claims)
-                client_item.assigned_to = []
+        merge_restore_bill_from_existing(bill, existing)
     bill = bill_store.recalculate_bill_totals(bill)
     if bill.paid_by is None:
         bill.paid_by = []

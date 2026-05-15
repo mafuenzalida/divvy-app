@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Divvy — Divide boletas sin drama</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0a0a0f;
+            --card: #1a1a24;
+            --accent: #6366f1;
+            --success: #10b981;
+            --text: #f8fafc;
+            --muted: #94a3b8;
+            --border: #2d2d3a;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Outfit', system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background:
+                radial-gradient(ellipse at 20% 20%, rgba(99, 102, 241, 0.12) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 80%, rgba(16, 185, 129, 0.08) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: -1;
+        }
+        .wrap {
+            max-width: 640px;
+            margin: 0 auto;
+            padding: 3rem 1.5rem;
+            text-align: center;
+        }
+        h1 {
+            font-size: clamp(2.2rem, 6vw, 3rem);
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent), var(--success));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.75rem;
+        }
+        p.lead { color: var(--muted); font-size: 1.15rem; margin-bottom: 2rem; }
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 1.75rem;
+            margin-bottom: 1.5rem;
+            text-align: left;
+        }
+        .card h2 { font-size: 1rem; color: var(--muted); font-weight: 500; margin-bottom: 0.75rem; }
+        .card ul { padding-left: 1.25rem; color: var(--text); }
+        .card li { margin: 0.35rem 0; }
+        .actions { display: flex; flex-wrap: wrap; gap: 0.75rem; justify-content: center; margin-top: 0.5rem; }
+        a.btn {
+            display: inline-block;
+            text-decoration: none;
+            font-weight: 600;
+            padding: 0.85rem 1.5rem;
+            border-radius: 12px;
+            font-size: 1rem;
+        }
+        a.primary {
+            background: linear-gradient(135deg, var(--accent), #4f46e5);
+            color: white;
+        }
+        a.secondary {
+            background: transparent;
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+        footer { margin-top: 2rem; font-size: 0.85rem; color: var(--muted); }
+        footer a { color: #818cf8; }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <h1>Divvy</h1>
+        <p class="lead">Escanea boletas, asigna ítems y comparte enlaces de pago. Menos hojas de cálculo, más tiempo con la gente que importa.</p>
+        <div class="card">
+            <h2>Qué puedes hacer</h2>
+            <ul>
+                <li>OCR con IA para extraer ítems de la foto</li>
+                <li>Enlaces de anfitrión y participante por boleta</li>
+                <li>Cuenta opcional por enlace mágico al correo</li>
+            </ul>
+        </div>
+        <div class="actions">
+            <a class="btn primary" href="/app">Abrir app</a>
+            <a class="btn secondary" href="/login">Iniciar sesión</a>
+        </div>
+        <footer>API y rutas bajo <code style="color:var(--muted);">/api</code> — ver README del repositorio.</footer>
+    </div>
+</body>
+</html>

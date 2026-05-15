@@ -495,6 +495,28 @@ def get_user_by_email(email: str) -> Optional[dict]:
     return None
 
 
+def set_user_admin(email: str, is_admin: bool = True) -> None:
+    """Ensure user row has is_admin flag (Turso or local auth file)."""
+    e = email.strip().lower()
+    flag = 1 if is_admin else 0
+    if USE_TURSO:
+        client = _get_turso_client()
+        if client:
+            client.execute(
+                "UPDATE users SET is_admin = ? WHERE email = ?",
+                (flag, e),
+            )
+            client.commit()
+            return
+    store = _load_auth_file()
+    for uid, row in store["users"].items():
+        if (row.get("email") or "").lower() == e:
+            row["is_admin"] = bool(is_admin)
+            store["users"][uid] = row
+            _save_auth_file(store)
+            return
+
+
 def get_user_by_id(user_id: str) -> Optional[dict]:
     if USE_TURSO:
         client = _get_turso_client()
