@@ -980,9 +980,10 @@
         <header>
             <h1 class="logo">Divvy</h1>
             <p class="tagline">Escanea, divide y cobra — sin drama ✨</p>
-            <p style="margin-top:0.5rem;">
-                <a href="/login" class="btn btn-secondary" style="font-size:0.8rem;padding:0.35rem 0.75rem;display:inline-block;text-decoration:none;" id="account-btn">Cuenta</a>
-            </p>
+            <div style="margin-top:0.75rem;display:flex;flex-wrap:wrap;gap:0.5rem;justify-content:center;align-items:center;">
+                <button type="button" class="btn btn-primary" style="font-size:0.85rem;padding:0.4rem 1rem;" id="new-bill-btn" onclick="newBill()">+ Nueva boleta</button>
+                <a href="/login" class="btn btn-secondary" style="font-size:0.8rem;padding:0.35rem 0.75rem;display:inline-block;text-decoration:none;" id="account-btn">Iniciar sesión</a>
+            </div>
         </header>
 
         <!-- Upload Section -->
@@ -1521,18 +1522,8 @@
                 const data = await response.json();
                 const serverBills = data.bills || [];
                 
-                // Create a set of server bill IDs for quick lookup
-                const serverBillIds = new Set(serverBills.map(b => b.id));
-                
-                // Remove bills from localStorage that don't exist on server anymore
-                const billsToKeep = allBills.filter(bill => serverBillIds.has(bill.id));
-                const removedCount = allBills.length - billsToKeep.length;
-                if (removedCount > 0) {
-                    console.log(`Removed ${removedCount} stale bills from localStorage`);
-                }
-                allBills = billsToKeep;
-                
-                // Merge server bills with local bills (add new ones, update existing ones)
+                // Merge server bills with local bills (add new ones, update existing ones).
+                // Keep guest/local bills that are not on the server — do not delete them.
                 serverBills.forEach(serverBill => {
                     const existingIndex = allBills.findIndex(b => b.id === serverBill.id);
                     if (existingIndex === -1) {
@@ -2890,15 +2881,24 @@
             await refreshAccount();
             const ab = document.getElementById('account-btn');
             if (ab) {
-                ab.textContent = accountUser ? ('Cuenta · ' + accountUser.email) : 'Cuenta';
-                ab.setAttribute('href', '/login');
+                if (accountUser) {
+                    ab.textContent = 'Mi cuenta · ' + accountUser.email;
+                    ab.setAttribute('href', '/login');
+                } else {
+                    ab.textContent = 'Iniciar sesión';
+                    ab.setAttribute('href', '/login');
+                }
             }
 
             loadAllBills();
 
             const up = new URLSearchParams(window.location.search);
             const urlBill = up.get('bill');
-            if (urlBill) {
+            const startNew = up.get('new') === '1';
+            if (startNew && !urlBill) {
+                window.history.replaceState({}, '', APP_BASE);
+                await newBill();
+            } else if (urlBill) {
                 try {
                     const r = await hostFetch(`/api/bill/${urlBill}?fresh=true`);
                     if (r.ok) {
@@ -2936,6 +2936,8 @@
 
                     if (urlBill) {
                         showToast('Boleta cargada desde link', 'success');
+                    } else if (startNew) {
+                        showToast('Nueva boleta lista', 'success');
                     } else {
                         showToast('Sesión anterior restaurada', 'success');
                     }
