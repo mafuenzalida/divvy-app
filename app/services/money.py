@@ -35,17 +35,21 @@ def compute_person_item_subtotals_minor(bill: Bill) -> dict[str, int]:
     return out
 
 
-def _distribute_largest_remainder(total_units: int, weights: dict[str, float]) -> dict[str, int]:
+def _distribute_largest_remainder(
+    total_units: int,
+    weights: dict[str, float],
+    *,
+    denominator: float | None = None,
+) -> dict[str, int]:
     """Split total_units across keys proportional to weights (>=0). Deterministic."""
     if total_units == 0:
         return {k: 0 for k in weights}
-    sw = sum(max(0.0, w) for w in weights.values())
+    w_sum = sum(max(0.0, w) for w in weights.values())
+    if w_sum <= 0:
+        return {k: 0 for k in weights}
+    sw = float(denominator) if denominator is not None else w_sum
     if sw <= 0:
-        keys = sorted(weights.keys())
-        if not keys:
-            return {}
-        base, rem = divmod(total_units, len(keys))
-        return {k: base + (1 if i < rem else 0) for i, k in enumerate(keys)}
+        return {k: 0 for k in weights}
 
     floors: dict[str, int] = {}
     fracs: list[tuple[float, str]] = []
@@ -70,7 +74,8 @@ def _distribute_largest_remainder(total_units: int, weights: dict[str, float]) -
 def compute_person_totals_minor(bill: Bill) -> dict[str, int]:
     """
     Per-person totals in minor units: assigned item shares plus proportional tax+tip.
-    Uses bill.subtotal (stored) as denominator for tax/tip proportion, matching prior API behavior.
+    Tax/tip share is (person item subtotal / bill subtotal), so unclaimed items do not
+    inflate anyone's tip or tax.
     """
     item_sub = compute_person_item_subtotals_minor(bill)
     tax_tip_minor = to_minor(bill.tax) + to_minor(bill.tip)
@@ -79,9 +84,14 @@ def compute_person_totals_minor(bill: Bill) -> dict[str, int]:
     if tax_tip_minor == 0 or base_minor <= 0:
         return item_sub
 
-    extras = _distribute_largest_remainder(tax_tip_minor, {p: float(item_sub.get(p, 0)) for p in bill.people})
+    extras = _distribute_largest_remainder(
+        tax_tip_minor,
+        {p: float(item_sub.get(p, 0)) for p in bill.people},
+        denominator=float(base_minor),
+    )
     return {p: item_sub.get(p, 0) + extras.get(p, 0) for p in bill.people}
 
 
 def fintoc_link_amount_minor(person_minor: int) -> int:
-    return max(0, int(round(person_minor)))
+    """Fintoc CLP links use whole pesos, not cent-style minor units."""
+    return max(0, int(round(person_minor / SCALE)))

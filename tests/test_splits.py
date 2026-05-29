@@ -1,7 +1,7 @@
 """Split math tests (line shares + minor-unit totals)."""
 
 from app.domain.models import Bill, BillItem
-from app.services.money import compute_person_totals_minor, from_minor
+from app.services.money import compute_person_totals_minor, fintoc_link_amount_minor, from_minor
 from app.services.splits import person_line_dollar_share, set_item_claim_units
 
 
@@ -67,3 +67,29 @@ def test_tax_tip_proportional_minor():
     m = compute_person_totals_minor(bill)
     total_minor = m["A"] + m["B"]
     assert abs(total_minor - 23000) < 5
+
+
+def test_tax_tip_only_on_claimed_share():
+    """Unclaimed items must not redistribute their tax/tip to people who did claim."""
+    items = [
+        BillItem(id="i1", name="a", price=40.0, quantity=1, claims={"A": 1.0}),
+        BillItem(id="i2", name="b", price=20.0, quantity=1, claims={"B": 1.0}),
+        BillItem(id="i3", name="c", price=40.0, quantity=1, claims={}),
+    ]
+    bill = _bill(
+        items=items,
+        people=["A", "B"],
+        subtotal=100.0,
+        tax=0.0,
+        tip=10.0,
+        total=110.0,
+    )
+    m = compute_person_totals_minor(bill)
+    assert abs(from_minor(m["A"]) - 44.0) < 0.02
+    assert abs(from_minor(m["B"]) - 22.0) < 0.02
+    assert abs(from_minor(m["A"]) + from_minor(m["B"]) - 66.0) < 0.02
+
+
+def test_fintoc_link_uses_whole_pesos():
+    assert fintoc_link_amount_minor(2039610) == 20396
+    assert fintoc_link_amount_minor(2039600) == 20396
