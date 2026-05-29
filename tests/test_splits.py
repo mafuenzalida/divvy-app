@@ -90,6 +90,26 @@ def test_tax_tip_only_on_claimed_share():
     assert abs(from_minor(m["A"]) + from_minor(m["B"]) - 66.0) < 0.02
 
 
+def test_sole_claimer_does_not_absorb_unclaimed_tip():
+    """When one person is the only claimer, they still only pay tip on their share."""
+    items = [
+        BillItem(id="i1", name="mine", price=7500.0, quantity=1, claims={"Martin": 1.0}),
+        BillItem(id="i2", name="other", price=97461.0, quantity=1, claims={}),
+    ]
+    bill = _bill(
+        items=items,
+        people=["Martin", "Ana"],
+        subtotal=104961.0,
+        tax=0.0,
+        tip=10496.0,
+        tip_percent=10.0,
+        total=115457.0,
+    )
+    m = compute_person_totals_minor(bill)
+    assert abs(from_minor(m["Martin"]) - 8250.0) < 1.0
+    assert m.get("Ana", 0) == 0
+
+
 def test_fintoc_link_uses_whole_pesos():
     assert fintoc_link_amount_minor(2039610) == 20396
     assert fintoc_link_amount_minor(2039600) == 20396

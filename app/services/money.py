@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import math
-
 from app.domain.models import Bill
 from app.services.splits import person_line_dollar_share
 
@@ -35,40 +33,20 @@ def compute_person_item_subtotals_minor(bill: Bill) -> dict[str, int]:
     return out
 
 
-def _distribute_largest_remainder(
-    total_units: int,
-    weights: dict[str, float],
-    *,
-    denominator: float | None = None,
+def _person_tax_tip_extras_minor(
+    tax_tip_minor: int, item_sub: dict[str, int], base_minor: int, people: list[str]
 ) -> dict[str, int]:
-    """Split total_units across keys proportional to weights (>=0). Deterministic."""
-    if total_units == 0:
-        return {k: 0 for k in weights}
-    w_sum = sum(max(0.0, w) for w in weights.values())
-    if w_sum <= 0:
-        return {k: 0 for k in weights}
-    sw = float(denominator) if denominator is not None else w_sum
-    if sw <= 0:
-        return {k: 0 for k in weights}
-
-    floors: dict[str, int] = {}
-    fracs: list[tuple[float, str]] = []
-    for k in sorted(weights.keys()):
-        w = max(0.0, float(weights[k]))
-        exact = total_units * (w / sw)
-        fl = int(math.floor(exact + 1e-12))
-        floors[k] = fl
-        fracs.append((exact - fl, k))
-    assigned = sum(floors.values())
-    leftover = total_units - assigned
-    fracs.sort(key=lambda x: (-x[0], x[1]))
-    i = 0
-    while leftover > 0:
-        _, k = fracs[i % len(fracs)]
-        floors[k] += 1
-        leftover -= 1
-        i += 1
-    return floors
+    """Per-person tax+tip in minor units; unclaimed bill share keeps its tax/tip unassigned."""
+    if tax_tip_minor == 0 or base_minor <= 0:
+        return {p: 0 for p in people}
+    extras: dict[str, int] = {}
+    for p in people:
+        share = item_sub.get(p, 0)
+        if share <= 0:
+            extras[p] = 0
+        else:
+            extras[p] = int(round(tax_tip_minor * share / base_minor))
+    return extras
 
 
 def compute_person_totals_minor(bill: Bill) -> dict[str, int]:
@@ -84,11 +62,7 @@ def compute_person_totals_minor(bill: Bill) -> dict[str, int]:
     if tax_tip_minor == 0 or base_minor <= 0:
         return item_sub
 
-    extras = _distribute_largest_remainder(
-        tax_tip_minor,
-        {p: float(item_sub.get(p, 0)) for p in bill.people},
-        denominator=float(base_minor),
-    )
+    extras = _person_tax_tip_extras_minor(tax_tip_minor, item_sub, base_minor, bill.people)
     return {p: item_sub.get(p, 0) + extras.get(p, 0) for p in bill.people}
 
 
