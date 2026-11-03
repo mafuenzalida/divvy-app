@@ -14,6 +14,17 @@ from app.core.config import get_settings
 
 LOG = logging.getLogger("divvy")
 
+OCR_RULES = """
+Rules:
+- List EVERY purchased line. Long receipts must not drop items.
+- Do not include TOTAL, SUBTOTAL, IVA, tax, tip, or pago rows in items.
+- quantity = units sold (default 1). price = UNIT price (line total ÷ quantity).
+- Optionally set line_total to the printed line amount.
+- Prices are numbers with NO thousand separators. Chilean pesos as integers: 12500 not 12.500.
+- tax/IVA and tip/propina only if printed separately (not already in item prices).
+- Use 0 for unknown values.
+"""
+
 
 def encode_image_to_base64(image_bytes: bytes) -> str:
     return base64.b64encode(image_bytes).decode("utf-8")
@@ -28,29 +39,28 @@ def parse_bill_with_gemini(image_bytes: bytes) -> dict:
     image = Image.open(io.BytesIO(image_bytes))
     if image.mode != "RGB":
         image = image.convert("RGB")
-    prompt = """Look at this receipt/bill image and extract all the purchased items with their prices.
+    prompt = f"""Look at this receipt/bill image and extract all purchased items.
 
 Return ONLY a valid JSON object (no markdown, no explanation) with this structure:
-{
+{{
     "items": [
-        {"name": "Item name", "price": 1000, "quantity": 1}
+        {{"name": "Item name", "price": 1000, "quantity": 1, "line_total": 1000}}
     ],
     "subtotal": 5000,
     "tax": 950,
     "tip": 0,
     "total": 5950
-}
-
-Rules:
-- List every item you can see with its price
-- For each item set "quantity" to the count sold (default 1). If the line shows "3 x Beer" or "2 Café", use 3 or 2 and set "price" to the UNIT price (line total ÷ quantity). If only a line total exists, use quantity 1 and that price.
-- Prices must be numbers (integers or decimals)
-- Include tax/IVA if shown
-- Include tip/propina if shown
-- Use 0 for unknown values
+}}
+{OCR_RULES}
 """
     try:
-        response = model.generate_content([prompt, image])
+        try:
+            response = model.generate_content(
+                [prompt, image],
+                generation_config={"max_output_tokens": 8192, "temperature": 0},
+            )
+        except TypeError:
+            response = model.generate_content([prompt, image])
         if not response.candidates:
             feedback = getattr(response, "prompt_feedback", None)
             raise ValueError(f"Gemini blocked the request: {feedback}")
@@ -195,29 +205,20 @@ def parse_bill_with_openai(image_base64: str) -> dict:
 
     s = get_settings()
     client = OpenAI(api_key=s.openai_api_key)
-    prompt = """Analyze this receipt/bill image and extract all items with their prices.
+    prompt = f"""Analyze this receipt/bill image and extract all items.
 
     Return a JSON object with this exact structure:
-    {
+    {{
         "items": [
-            {"name": "Item name", "price": 10.99, "quantity": 1},
-            ...
+            {{"name": "Item name", "price": 10.99, "quantity": 1, "line_total": 10.99}}
         ],
         "subtotal": 100.00,
         "tax": 19.00,
         "tip": 0.00,
         "total": 119.00
-    }
-
-    Rules:
-    - Extract ALL items from the receipt
-    - For each item set "quantity" to how many units that line represents (e.g. "4 x Pizza" → quantity 4). Use "price" as UNIT price (line total ÷ quantity when quantity > 1).
-    - Prices should be numbers (not strings)
-    - If tax (IVA, impuesto) is shown separately, include it
-    - If tip (propina, service) is shown, include it
-    - If you can't determine a value, use 0
-    - Calculate totals if not explicitly shown
-    - Return ONLY valid JSON, no other text
+    }}
+    {OCR_RULES}
+    Return ONLY valid JSON, no other text.
     """
     response = client.chat.completions.create(
         model="gpt-4o",
@@ -233,7 +234,8 @@ def parse_bill_with_openai(image_base64: str) -> dict:
                 ],
             }
         ],
-        max_tokens=2000,
+        response_format={"type": "json_object"},
+        max_tokens=16000,
     )
     result_text = response.choices[0].message.content
     if "```json" in result_text:

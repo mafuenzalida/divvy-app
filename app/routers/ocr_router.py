@@ -11,6 +11,7 @@ from app.domain.models import Bill, BillItem, new_bill_id, new_item_id
 from app.limiter import limiter
 from app.services import bill_store
 from app.services import ocr as ocr_service
+from app.services.ocr_normalize import normalize_parsed_receipt
 
 router = APIRouter(tags=["ocr"])
 
@@ -49,6 +50,7 @@ async def scan_bill(request: Request, file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing image: {e}") from e
 
+    parsed_data = normalize_parsed_receipt(parsed_data)
     bill_id = new_bill_id()
     items = [
         BillItem(
@@ -64,13 +66,11 @@ async def scan_bill(request: Request, file: UploadFile = File(...)):
         id=bill_id,
         title="Boleta",
         items=items,
-        subtotal=float(
-            parsed_data.get("subtotal", sum(i.price * i.quantity for i in items))
-        ),
+        subtotal=float(parsed_data["subtotal"]),
         tax=float(parsed_data.get("tax", 0)),
         tip=float(parsed_data.get("tip", 0)),
         tip_percent=0.0,
-        total=float(parsed_data.get("total", 0)),
+        total=float(parsed_data["total"]),
         people=[],
         paid_by=[],
         locked=False,
@@ -81,6 +81,7 @@ async def scan_bill(request: Request, file: UploadFile = File(...)):
         owner_user_id=None,
         version=0,
     )
+    bill = bill_store.recalculate_bill_totals(bill)
     bill = bill_store.persist_bill(bill, None)
     base = s.base_url.rstrip("/")
     out = bill.model_dump()

@@ -2058,7 +2058,9 @@
 
         function renderBill() {
             if (!currentBill) return;
-            
+
+            recalculateTotals();
+
             // Start auto-refresh when viewing a bill
             startAutoRefresh();
 
