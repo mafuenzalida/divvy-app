@@ -334,7 +334,7 @@ async def calculate_splits(bill_id: str, request: Request):
         "person_totals": person_totals,
         "person_totals_minor": minor,
         "payment_links": payment_links,
-        "bill_total": bill.total,
+        "bill_total": bill.subtotal + bill.tax + bill.tip,
         "assigned_total": sum(person_totals.values()),
     }
 

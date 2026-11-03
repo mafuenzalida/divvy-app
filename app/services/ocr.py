@@ -30,6 +30,16 @@ def encode_image_to_base64(image_bytes: bytes) -> str:
     return base64.b64encode(image_bytes).decode("utf-8")
 
 
+def _gemini_generate(model, prompt, image):
+    try:
+        return model.generate_content(
+            [prompt, image],
+            generation_config={"max_output_tokens": 8192, "temperature": 0},
+        )
+    except TypeError:
+        return model.generate_content([prompt, image])
+
+
 def parse_bill_with_gemini(image_bytes: bytes) -> dict:
     import google.generativeai as genai
 
@@ -54,21 +64,19 @@ Return ONLY a valid JSON object (no markdown, no explanation) with this structur
 {OCR_RULES}
 """
     try:
-        try:
-            response = model.generate_content(
-                [prompt, image],
-                generation_config={"max_output_tokens": 8192, "temperature": 0},
-            )
-        except TypeError:
-            response = model.generate_content([prompt, image])
+        response = _gemini_generate(model, prompt, image)
         if not response.candidates:
             feedback = getattr(response, "prompt_feedback", None)
             raise ValueError(f"Gemini blocked the request: {feedback}")
         result_text = response.text
     except ValueError as e:
         if "blocked" in str(e).lower() or "empty" in str(e).lower():
-            simple_prompt = 'List all items from this receipt as JSON: {"items": [{"name": "...", "price": 0, "quantity": 1}], "total": 0}. Use quantity>1 when a line shows multiples; price = unit price.'
-            response = model.generate_content([simple_prompt, image])
+            simple_prompt = f"""Look at this receipt and extract all purchased items.
+Return ONLY JSON:
+{{"items": [{{"name": "...", "price": 0, "quantity": 1, "line_total": 0}}], "subtotal": 0, "tax": 0, "tip": 0, "total": 0}}
+{OCR_RULES}
+"""
+            response = _gemini_generate(model, simple_prompt, image)
             if not response.candidates:
                 raise ValueError(
                     "Gemini could not process this image. Try a clearer photo."

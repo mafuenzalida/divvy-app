@@ -20,27 +20,30 @@ def load_bills_from_storage() -> None:
     try:
         data = database.load_all_bills()
         for bill_id, bill_data in data.items():
-            bills_storage[bill_id] = Bill(**bill_data)
+            bill = Bill(**bill_data)
+            recalculate_bill_totals(bill)
+            bills_storage[bill_id] = bill
     except Exception as e:
         LOG.exception("load_bills_failed error=%s", str(e))
 
 
 def fetch_bill(bill_id: str, force_refresh: bool = False) -> Optional[Bill]:
+    bill: Optional[Bill] = None
     if force_refresh:
         bill_data = database.get_bill(bill_id)
         if bill_data:
             bill = Bill(**bill_data)
-            bills_storage[bill_id] = bill
-            return bill
+    elif bill_id in bills_storage:
+        bill = bills_storage[bill_id]
+    else:
+        bill_data = database.get_bill(bill_id)
+        if bill_data:
+            bill = Bill(**bill_data)
+    if not bill:
         return None
-    if bill_id in bills_storage:
-        return bills_storage[bill_id]
-    bill_data = database.get_bill(bill_id)
-    if bill_data:
-        bill = Bill(**bill_data)
-        bills_storage[bill_id] = bill
-        return bill
-    return None
+    recalculate_bill_totals(bill)
+    bills_storage[bill_id] = bill
+    return bill
 
 
 def refresh_bill_from_db(bill_id: str) -> Optional[Bill]:
@@ -49,6 +52,7 @@ def refresh_bill_from_db(bill_id: str) -> Optional[Bill]:
 
 def persist_bill(bill: Bill, expected_version: Optional[int] = None) -> Bill:
     """Write bill to DB then cache. Optional optimistic version check."""
+    recalculate_bill_totals(bill)
     d = bill.model_dump()
     try:
         database.save_bill_with_version(bill.id, d, expected_version)
@@ -69,6 +73,7 @@ def persist_bill(bill: Bill, expected_version: Optional[int] = None) -> Bill:
 
 def persist_bill_no_version(bill: Bill) -> Bill:
     """Save without optimistic check (server-only paths)."""
+    recalculate_bill_totals(bill)
     database.save_bill(bill.id, bill.model_dump())
     fresh = database.get_bill(bill.id)
     if not fresh:

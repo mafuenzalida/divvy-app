@@ -110,6 +110,25 @@ def test_sole_claimer_does_not_absorb_unclaimed_tip():
     assert m.get("Ana", 0) == 0
 
 
+def test_stale_stored_subtotal_does_not_change_tip_share():
+    """Tax/tip proportion uses Σ(items), not a stale bill.subtotal from OCR."""
+    bill = _bill(
+        items=[
+            BillItem(id="i1", name="mine", price=7500.0, quantity=1, claims={"Martin": 1.0}),
+            BillItem(id="i2", name="other", price=2500.0, quantity=1, claims={}),
+        ],
+        people=["Martin"],
+        subtotal=999999.0,
+        tax=0.0,
+        tip=1000.0,
+        tip_percent=0.0,
+        total=11000.0,
+    )
+    m = compute_person_totals_minor(bill)
+
+    assert abs(from_minor(m["Martin"]) - 8250.0) < 1.0
+
+
 def test_fintoc_link_uses_whole_pesos():
     assert fintoc_link_amount_minor(2039610) == 20396
     assert fintoc_link_amount_minor(2039600) == 20396

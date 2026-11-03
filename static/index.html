@@ -2659,10 +2659,12 @@
                 });
             });
             
-            // Add proportional tip/tax
-            if (currentBill.subtotal > 0) {
+            const itemsSubtotal = currentBill.items.reduce(
+                (sum, item) => sum + (item.price * item.quantity), 0
+            );
+            if (itemsSubtotal > 0) {
                 currentBill.people.forEach(person => {
-                    const proportion = personTotals[person] / currentBill.subtotal;
+                    const proportion = personTotals[person] / itemsSubtotal;
                     personTotals[person] += (currentBill.tip || 0) * proportion + (currentBill.tax || 0) * proportion;
                 });
             }

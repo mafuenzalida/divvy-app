@@ -57,7 +57,7 @@ def compute_person_totals_minor(bill: Bill) -> dict[str, int]:
     """
     item_sub = compute_person_item_subtotals_minor(bill)
     tax_tip_minor = to_minor(bill.tax) + to_minor(bill.tip)
-    base_minor = to_minor(bill.subtotal)
+    base_minor = compute_items_subtotal_minor(bill)
 
     if tax_tip_minor == 0 or base_minor <= 0:
         return item_sub

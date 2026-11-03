@@ -1093,6 +1093,21 @@
             return lineTotal * (u / s);
         }
 
+        function billItemsSubtotal(bill) {
+            return (bill.items || []).reduce(
+                (sum, item) => sum + (Number(item.price) || 0) * (Number(item.quantity) || 1),
+                0
+            );
+        }
+
+        function billDisplayTotals(bill) {
+            const subtotal = billItemsSubtotal(bill);
+            const tax = Number(bill.tax) || 0;
+            const tipPercent = Number(bill.tip_percent) || 0;
+            const tip = tipPercent > 0 ? subtotal * (tipPercent / 100) : (Number(bill.tip) || 0);
+            return { subtotal, tax, tip, total: subtotal + tax + tip };
+        }
+
         document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('share-modal')?.addEventListener('click', (e) => {
                 if (e.target.id === 'share-modal') closeShareModal();
@@ -1494,15 +1509,14 @@
             
             container.innerHTML = itemsHtml;
             
-            // Calculate proportional tip and tax
-            const billSubtotal = bill.subtotal || 0;
+            const totals = billDisplayTotals(bill);
             let myTip = 0;
             let myTax = 0;
-            
-            if (billSubtotal > 0) {
-                const proportion = subtotal / billSubtotal;
-                myTip = (bill.tip || 0) * proportion;
-                myTax = (bill.tax || 0) * proportion;
+
+            if (totals.subtotal > 0) {
+                const proportion = subtotal / totals.subtotal;
+                myTip = totals.tip * proportion;
+                myTax = totals.tax * proportion;
             }
             
             const myTotal = subtotal + myTip + myTax;
@@ -1637,11 +1651,11 @@
         }
 
         function renderSummary() {
-            const bill = billData.bill;
-            document.getElementById('summary-subtotal').textContent = `$${formatNumber(bill.subtotal || 0)}`;
-            document.getElementById('summary-tip').textContent = `$${formatNumber(bill.tip || 0)}`;
-            document.getElementById('summary-tax').textContent = `$${formatNumber(bill.tax || 0)}`;
-            document.getElementById('summary-total').textContent = `$${formatNumber(bill.total || 0)}`;
+            const totals = billDisplayTotals(billData.bill);
+            document.getElementById('summary-subtotal').textContent = `$${formatNumber(totals.subtotal)}`;
+            document.getElementById('summary-tip').textContent = `$${formatNumber(totals.tip)}`;
+            document.getElementById('summary-tax').textContent = `$${formatNumber(totals.tax)}`;
+            document.getElementById('summary-total').textContent = `$${formatNumber(totals.total)}`;
         }
 
         function renderOthers() {
